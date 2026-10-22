@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-For a standalone static build (outside RUN.world): `npm run build:bundled` and host the `dist/` folder.
+For a standalone static build: `npm run build` and host the `dist/` folder.
 
 ## Windows desktop app
 

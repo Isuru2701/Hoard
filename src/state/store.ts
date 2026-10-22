@@ -49,6 +49,7 @@ export interface AppState {
     booted: boolean;
     screen: 'picker' | 'workspace';
     profile: Profile | null;
+    profiles: Profile[];
     workspaces: WorkspaceRecord[];
     wsId: string | null;
     scan: ScanResult | null;
@@ -82,6 +83,7 @@ let state: AppState = {
     booted: false,
     screen: 'picker',
     profile: null,
+    profiles: [],
     workspaces: [],
     wsId: null,
     scan: null,

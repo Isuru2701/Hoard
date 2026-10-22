@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { store, useStore } from '../state/store.ts';
 import { autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
 import { basename, getFile } from '../lib/fs.ts';
@@ -10,6 +10,7 @@ import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
 import { TagManager } from './views/Tags.tsx';
+import { loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
 const CANVAS_SHORTCUTS = [
@@ -79,6 +80,16 @@ function TagEditor({ path }: { path: string }) {
     const auto = meta?.autoTags ?? [];
     const [maxAutoTags, setMaxAutoTags] = useState(5);
     const [tagging, setTagging] = useState(false);
+    const [models, setModels] = useState(taggerModels);
+    const [modelId, setModelId] = useState(() => selectedTaggerModel()?.id ?? '');
+    const [downloading, setDownloading] = useState(false);
+    const [downloaded, setDownloaded] = useState(false);
+    useEffect(() => {
+        void loadTaggerModels().then(setModels);
+    }, []);
+    useEffect(() => {
+        void taggerModelDownloaded().then(setDownloaded);
+    }, [modelId]);
     const add = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -111,6 +122,24 @@ function TagEditor({ path }: { path: string }) {
                         {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} max</option>)}
                     </select>
                 </div>
+                <select
+                    className="input mt-2 !h-8 w-full text-xs"
+                    aria-label="Tagging model"
+                    value={modelId}
+                    onChange={(event) => {
+                        setModelId(event.target.value);
+                        setSelectedTaggerModel(event.target.value);
+                        setDownloaded(false);
+                    }}
+                >
+                    {models.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+                <button className="btn btn-subtle mt-2 h-8 w-full justify-center text-xs" disabled={downloading || downloaded} onClick={() => {
+                    setDownloading(true);
+                    void loadTaggerModel().then(() => setDownloaded(true)).catch(() => toast('Could not download the selected model')).finally(() => setDownloading(false));
+                }}>
+                    {downloading ? 'Downloading…' : downloaded ? 'Model downloaded' : 'Download model'}
+                </button>
                 <button className="btn btn-primary mt-2 h-8 w-full justify-center text-xs" disabled={tagging} onClick={() => void runAutoTag()}>
                     <Icon name="sparkles" size={13} />
                     {tagging ? 'Analysing…' : 'Tag this image'}

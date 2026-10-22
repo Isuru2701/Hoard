@@ -11,9 +11,7 @@
         "desktop:build": "tauri build",
         "_build": "tsc --noEmit && vite build",
         "build": "npm run _build",
-        "build:bundled": "cross-env RUNDOT_GAME_DISABLE_EMBEDDED_LIBS=true npm run _build",
-        "preview": "vite preview",
-        "deploy": "npm run build && rundot deploy"
+        "preview": "vite preview"
     },
     "keywords": [
         "pixi",
@@ -26,7 +24,6 @@
     "license": "SEE LICENSE IN LICENSE.txt",
     "allowScripts": {
         "@firebase/util": true,
-        "@series-inc/rundot-game-sdk": true,
         "esbuild": true,
         "fsevents": true,
         "protobufjs": true
@@ -35,8 +32,6 @@
         "@tauri-apps/api": "^2.8.0",
         "@huggingface/transformers": "^3.7.2",
         "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
-        "@series-inc/rundot-game-sdk": "5.29.1",
-        "pixi.js": "8.19.0",
         "react": "19.2.4",
         "react-dom": "19.2.4"
     },

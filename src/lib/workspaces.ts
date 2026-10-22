@@ -1,7 +1,8 @@
-import { idbGet, idbSet } from './idb.ts';
+import { idbDelete, idbGet, idbSet } from './idb.ts';
 import type { Dir } from './fs.ts';
 import { memoryRoot } from './memfs.ts';
 import { isTauri, nativeRoot, pickNativeFolder } from './tauriFs.ts';
+import type { View } from '../state/store.ts';
 
 export interface WorkspaceRecord {
     id: string;
@@ -13,8 +14,12 @@ export interface WorkspaceRecord {
     created: number;
     rootLabel: string;
     stats?: { folders: number; files: number; canvases: number };
+    profileId?: string;
+    lastView?: View;
+    lastOpened?: number;
 }
 export interface Profile {
+    id?: string;
     name: string;
     username: string;
     created: number;
@@ -26,9 +31,16 @@ export function uid(): string {
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
-export async function loadRegistry(): Promise<{ profile: Profile | null; workspaces: WorkspaceRecord[] }> {
-    const [profile, workspaces] = await Promise.all([idbGet<Profile>('kv', 'profile'), idbGet<WorkspaceRecord[]>('kv', 'workspaces')]);
-    return { profile: profile ?? null, workspaces: workspaces ?? [] };
+export async function loadRegistry(): Promise<{ profile: Profile | null; profiles: Profile[]; workspaces: WorkspaceRecord[] }> {
+    const [profile, profiles, workspaces] = await Promise.all([
+        idbGet<Profile>('kv', 'profile'),
+        idbGet<Profile[]>('kv', 'profiles'),
+        idbGet<WorkspaceRecord[]>('kv', 'workspaces'),
+    ]);
+    const migrated = profile && !profiles?.length ? [{ ...profile, id: profile.id ?? 'default' }] : profiles ?? [];
+    const active = profile ? { ...profile, id: profile.id ?? migrated[0]?.id ?? 'default' } : migrated[0] ?? null;
+    const records = (workspaces ?? []).map((workspace) => ({ ...workspace, profileId: workspace.profileId ?? active?.id }));
+    return { profile: active, profiles: migrated, workspaces: records };
 }
 export const saveWorkspaces = (list: WorkspaceRecord[]) => {
     if (isTauri()) {
@@ -38,6 +50,8 @@ export const saveWorkspaces = (list: WorkspaceRecord[]) => {
     return idbSet('kv', 'workspaces', list);
 };
 export const saveProfile = (p: Profile) => idbSet('kv', 'profile', p);
+export const saveProfiles = (profiles: Profile[]) => idbSet('kv', 'profiles', profiles);
+export const deleteActiveProfile = () => idbDelete('kv', 'profile');
 
 type PickerWindow = Window & { showDirectoryPicker?: (o?: { mode?: string; id?: string }) => Promise<Dir> };
 
@@ -57,7 +71,7 @@ export async function pickFolder(): Promise<Dir> {
 export let usingMemoryStorage = false;
 
 async function opfs(): Promise<Dir> {
-    const st = navigator.storage as unknown as { getDirectory?: () => Promise<Dir> }; // @rundot-ignore-storage
+    const st = navigator.storage as unknown as { getDirectory?: () => Promise<Dir> };
     if (!st?.getDirectory) throw new Error('unsupported');
     return st.getDirectory();
 }
@@ -66,7 +80,6 @@ export async function browserRoot(id: string): Promise<Dir> {
     try {
         const base = await opfs();
         const dir = await base.getDirectoryHandle(`hoard-${id}`, { create: true });
-        // Probe a write: some sandboxes allow reads but block writes.
         const probe = await dir.getFileHandle('.probe', { create: true });
         const w = await (probe as unknown as { createWritable(): Promise<{ write(d: string): Promise<void>; close(): Promise<void> }> }).createWritable();
         await w.write('ok');

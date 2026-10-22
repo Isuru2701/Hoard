@@ -11,7 +11,7 @@ function openDb(): Promise<IDBDatabase> {
     if (!dbPromise) {
         dbPromise = new Promise((resolve, reject) => {
             try {
-                const idb = (globalThis as unknown as Record<string, IDBFactory>)['indexed' + 'DB']; // @rundot-ignore-storage
+                const idb = (globalThis as unknown as Record<string, IDBFactory>)['indexed' + 'DB'];
                 const req = idb.open('hoard', 1);
                 req.onupgradeneeded = () => {
                     const db = req.result;

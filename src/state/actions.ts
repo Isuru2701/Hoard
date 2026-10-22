@@ -23,10 +23,12 @@ import { scanWorkspace } from '../lib/scan.ts';
 import { loadMeta, saveMeta, type ItemMeta, type TrashEntry, type WorkspaceMeta } from '../lib/meta.ts';
 import {
     deleteBrowserRoot,
+    deleteActiveProfile,
     loadRegistry,
     pickFolder,
     resolveRoot,
     saveProfile,
+    saveProfiles,
     saveWorkspaces,
     uid,
     usingMemoryStorage,
@@ -49,12 +51,13 @@ export function toast(msg: string) {
     toastTimer = window.setTimeout(() => store.patch({ toast: null }), 2800);
 }
 
-export function askText(title: string, value = '', okLabel = 'Create'): Promise<string | null> {
+export function askText(title: string, value = '', okLabel = 'Create', message?: string): Promise<string | null> {
     return new Promise((resolve) =>
         store.patch({
             dialog: {
                 kind: 'prompt',
                 title,
+                message,
                 value,
                 okLabel,
                 resolve: (v) => {
@@ -107,20 +110,59 @@ export function pickFiles(accept = 'image/*,video/*'): Promise<File[]> {
 // ---------------------------------------------------------------- registry / workspaces
 export async function bootRegistry() {
     try {
-        const { profile, workspaces } = await loadRegistry();
-        store.patch({ profile, workspaces, booted: true });
+        const { profile, profiles, workspaces } = await loadRegistry();
+        store.patch({ profile, profiles, workspaces, booted: true });
+        if (profile) {
+            const recent = workspaces
+                .filter((workspace) => !workspace.profileId || workspace.profileId === profile.id)
+                .sort((a, b) => (b.lastOpened ?? 0) - (a.lastOpened ?? 0))[0];
+            if (recent) await openWorkspace(recent.id);
+        }
     } catch (e) {
         console.warn(e);
         store.patch({ booted: true });
     }
 }
 
-export async function saveProfileAction(name: string, username: string) {
-    const prev = store.get().profile;
-    const p = { name, username: username.replace(/^@/, ''), created: prev?.created ?? Date.now() };
-    store.patch({ profile: p });
-    await saveProfile(p);
+export async function saveProfileAction(name: string, username: string, createNew = false) {
+    const prev = createNew ? null : store.get().profile;
+    const p = { id: prev?.id ?? uid(), name, username: username.replace(/^@/, ''), created: prev?.created ?? Date.now() };
+    const profiles = store.get().profiles.some((item) => item.id === p.id)
+        ? store.get().profiles.map((item) => (item.id === p.id ? p : item))
+        : [...store.get().profiles, p];
+    store.patch({ profile: p, profiles });
+    await Promise.all([saveProfile(p), saveProfiles(profiles)]);
     track('profile_saved');
+}
+
+export async function selectProfile(id: string) {
+    const profile = store.get().profiles.find((item) => item.id === id);
+    if (!profile) return;
+    store.patch({ profile, screen: 'picker' });
+}
+
+export async function deleteProfileAction(): Promise<WorkspaceRecord[]> {
+    const current = store.get();
+    const profile = current.profile;
+    if (!profile) return [];
+    const workspaceRecords = current.workspaces.filter((workspace) => workspace.profileId === profile.id);
+    const typed = await askText(
+        `Delete profile “${profile.name}”?`,
+        '',
+        'Delete profile',
+        `This profile has ${workspaceRecords.length} workspace${workspaceRecords.length === 1 ? '' : 's'}. They will be removed from hoard, but their files will not be touched. Type “${profile.name}” to confirm.`
+    );
+    if (typed !== profile.name) {
+        if (typed !== null) toast('Profile name did not match; nothing was deleted');
+        return [];
+    }
+    const profiles = current.profiles.filter((item) => item.id !== profile.id);
+    const workspaces = current.workspaces.filter((workspace) => workspace.profileId !== profile.id);
+    const nextProfile = profiles[0] ?? null;
+    store.patch({ profile: nextProfile, profiles, workspaces, screen: 'picker', wsId: null, scan: null, selection: [], focus: null });
+    await Promise.all([deleteActiveProfile(), saveProfiles(profiles), saveWorkspaces(workspaces)]);
+    track('profile_deleted', { workspaceCount: workspaceRecords.length });
+    return workspaceRecords;
 }
 
 async function setWorkspaces(list: WorkspaceRecord[]) {
@@ -156,6 +198,7 @@ export async function createWorkspace(name: string, kind: 'local' | 'browser', c
         kind,
         handle,
         path: nativePath,
+        profileId: store.get().profile?.id,
         created: Date.now(),
         rootLabel: kind === 'local' ? `📁 ${handle!.name}` : 'Stored in this browser',
     };
@@ -174,6 +217,10 @@ export async function openWorkspace(id: string): Promise<boolean> {
         return false;
     }
     root = dir;
+    const openedAt = Date.now();
+    const workspaces = store.get().workspaces.map((workspace) => workspace.id === id ? { ...workspace, lastOpened: openedAt } : workspace);
+    store.patch({ workspaces });
+    await saveWorkspaces(workspaces);
     clearDims();
     if (rec.kind === 'browser') navigator.storage?.persist?.().catch(() => {});
     const meta = await loadMeta(dir);
@@ -181,7 +228,7 @@ export async function openWorkspace(id: string): Promise<boolean> {
         wsId: id,
         meta,
         scan: null,
-        view: { kind: 'home' },
+        view: rec.lastView ?? { kind: 'home' },
         tabs: [],
         back: [],
         fwd: [],
@@ -193,6 +240,12 @@ export async function openWorkspace(id: string): Promise<boolean> {
     if (rec.kind === 'browser' && usingMemoryStorage)
         toast('This window blocks saving files, so this workspace only lasts until you close it. Download the app and host it to save for real.');
     await rescan();
+    const current = store.get();
+    const view = current.view;
+    const valid = view.kind === 'home' || view.kind === 'all' || view.kind === 'favorites' || view.kind === 'trash' || view.kind === 'tags'
+        || (view.kind === 'folder' && !!current.scan?.byPath.has(view.path))
+        || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path));
+    if (!valid) store.patch({ view: { kind: 'home' } });
     return true;
 }
 
@@ -238,6 +291,14 @@ export async function rescan() {
 // ---------------------------------------------------------------- navigation
 const tabbable = (v: View) => v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'tag';
 
+function persistLastView(view: View) {
+    const current = store.get();
+    if (!current.wsId) return;
+    const workspaces = current.workspaces.map((workspace) => workspace.id === current.wsId ? { ...workspace, lastView: view } : workspace);
+    store.patch({ workspaces });
+    void saveWorkspaces(workspaces);
+}
+
 export function navigate(view: View) {
     const s = store.get();
     if (narrow()) store.patch({ leftOpen: false });
@@ -245,6 +306,7 @@ export function navigate(view: View) {
     let tabs = s.tabs;
     if (tabbable(view) && !tabs.some((t) => viewKey(t) === viewKey(view))) tabs = [...tabs, view].slice(-12);
     store.patch({ view, tabs, back: [...s.back, s.view].slice(-50), fwd: [], selection: [], focus: null });
+    persistLastView(view);
     if (view.kind === 'folder' || view.kind === 'canvas') addRecent(view.path, view.kind);
 }
 
@@ -253,6 +315,7 @@ export function goBack() {
     const prev = s.back[s.back.length - 1];
     if (!prev) return;
     store.patch({ view: prev, back: s.back.slice(0, -1), fwd: [s.view, ...s.fwd], selection: [], focus: null });
+    persistLastView(prev);
 }
 
 export function goForward() {
@@ -260,6 +323,7 @@ export function goForward() {
     const next = s.fwd[0];
     if (!next) return;
     store.patch({ view: next, fwd: s.fwd.slice(1), back: [...s.back, s.view], selection: [], focus: null });
+    persistLastView(next);
 }
 
 export function closeTab(v: View) {
@@ -270,6 +334,7 @@ export function closeTab(v: View) {
     if (viewKey(s.view) === k) {
         const next = tabs[Math.min(idx, tabs.length - 1)] ?? { kind: 'home' };
         store.patch({ tabs, view: next, selection: [], focus: null });
+        persistLastView(next);
     } else store.patch({ tabs });
 }
 
@@ -387,7 +452,8 @@ export async function autoTagItem(path: string, maxTags: number): Promise<void> 
         track('autotag_item_finished', { count: tags.length });
     } catch (error) {
         console.warn('[autotag] model failed', error);
-        toast('Could not load the selected tagging model');
+        const message = error instanceof Error ? error.message : 'Could not load the selected tagging model';
+        toast(message);
     }
 }
 

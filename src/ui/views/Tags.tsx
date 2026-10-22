@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
 import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
-import { activeTaggerModel, loadTaggerModel, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
+import { activeTaggerModel, addTaggerModel, deleteTaggerModel, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, taggerModels, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
@@ -86,6 +86,9 @@ export function TagManager() {
     const [modelProgress, setModelProgress] = useState(0);
     const [modelDownloaded, setModelDownloaded] = useState(false);
     const [selectedModelId, setSelectedModelId] = useState(() => selectedTaggerModel()?.id ?? TAGGER_MODELS[0].id);
+    const [models, setModels] = useState(taggerModels);
+    const [newModelRepo, setNewModelRepo] = useState('');
+    const [newModelLabel, setNewModelLabel] = useState('');
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const drag = useRef<{ id: number; x: number; y: number; panX: number; panY: number } | null>(null);
@@ -140,6 +143,13 @@ export function TagManager() {
             setRunning(false);
         }
     };
+
+    useEffect(() => {
+        void loadTaggerModels().then((value) => {
+            setModels(value);
+            setSelectedModelId(selectedTaggerModel()?.id ?? value[0].id);
+        });
+    }, [selectedModelId]);
 
     useEffect(() => {
         void taggerModelDownloaded().then(setModelDownloaded);
@@ -247,7 +257,7 @@ export function TagManager() {
                                 setModelDownloaded(false);
                             }}
                         >
-                            {TAGGER_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                            {models.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                         </select>
                         <div className="mt-1 text-muted">{model.model} · {model.size} · {model.license}</div>
                     </div>
@@ -259,6 +269,31 @@ export function TagManager() {
                             <Icon name="download" size={13} /> {loadingModel ? `Downloading… ${Math.round(modelProgress)}%` : modelDownloaded ? 'Model downloaded' : 'Download model'}
                         </button>
                     </div>
+                    <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={(event) => {
+                        event.preventDefault();
+                        void addTaggerModel(newModelRepo, newModelLabel).then((added) => {
+                            setModels(taggerModels());
+                            setNewModelRepo('');
+                            setNewModelLabel('');
+                            setSelectedModelId(added.id);
+                            setSelectedTaggerModel(added.id);
+                            toast(`${added.label} added`);
+                        }).catch((error) => toast(error instanceof Error ? error.message : 'Could not add model'));
+                    }}>
+                        <input className="input !h-9 text-xs" placeholder="HF owner/model" value={newModelRepo} onChange={(event) => setNewModelRepo(event.target.value)} />
+                        <input className="input !h-9 text-xs" placeholder="Display name (optional)" value={newModelLabel} onChange={(event) => setNewModelLabel(event.target.value)} />
+                        <button className="btn btn-subtle h-9 text-xs" type="submit" disabled={!newModelRepo.trim()}>Add ONNX model</button>
+                    </form>
+                    {model.custom && (
+                        <button className="text-left text-xs text-danger hover:underline" disabled={loadingModel || running} onClick={() => {
+                            void deleteTaggerModel(model.id).then(() => {
+                                setModels(taggerModels());
+                                setSelectedModelId(selectedTaggerModel()?.id ?? models[0].id);
+                                setModelDownloaded(false);
+                                toast(`${model.label} deleted`);
+                            });
+                        }}>Delete this model and its local files</button>
+                    )}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted">{imageFiles.length} images in this workspace{running && ` · ${done} / ${imageFiles.length}`}</span>
