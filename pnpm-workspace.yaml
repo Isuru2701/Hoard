@@ -1,0 +1,4 @@
+allowBuilds:
+  "@series-inc/rundot-game-sdk": true
+onlyBuiltDependencies:
+  - "@series-inc/rundot-game-sdk"

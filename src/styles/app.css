@@ -1,0 +1,402 @@
+@import "tailwindcss";
+
+@theme {
+    --color-bg: #171717;
+    --color-panel: #1c1c1c;
+    --color-card: #1f1f1f;
+    --color-raised: #262626;
+    --color-line: #2c2c2c;
+    --color-muted: #8f8f8f;
+    --color-fg: #e8e8e8;
+    --color-accent: #5b9cff;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+}
+#root {
+    position: fixed;
+    inset: 0;
+}
+button {
+    cursor: pointer;
+}
+button:disabled {
+    cursor: default;
+    opacity: 0.35;
+}
+::selection {
+    background: #5b9cff55;
+}
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3a transparent;
+}
+
+.ib {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    border-radius: 8px;
+    color: #a3a3a3;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+}
+.ib:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+    color: #f5f5f5;
+}
+.ib-on {
+    background: rgba(91, 156, 255, 0.16) !important;
+    color: #9cc2ff !important;
+}
+.ib-danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #d4d4d4;
+    white-space: nowrap;
+    transition: background 0.12s;
+}
+.btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+}
+.btn-primary {
+    background: #ededed;
+    color: #141414;
+}
+.btn-primary:hover:not(:disabled) {
+    background: #fff;
+    color: #000;
+}
+.btn-subtle {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--color-line);
+}
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+    background: #ef4444;
+}
+
+.input {
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--color-line);
+    color: var(--color-fg);
+    font-size: 13px;
+    outline: none;
+}
+.input:focus {
+    border-color: #5b9cff88;
+    background: rgba(255, 255, 255, 0.06);
+}
+textarea.input {
+    height: auto;
+    padding: 8px 10px;
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.45;
+}
+.ghost-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 13px;
+    color: var(--color-fg);
+    padding: 4px 0;
+    resize: none;
+}
+.ghost-input::placeholder,
+.input::placeholder {
+    color: #6b6b6b;
+}
+
+.section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7a7a7a;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #cfcfcf;
+    text-align: left;
+}
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.nav-item.on {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-weight: 600;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding-right: 4px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    color: #cfcfcf;
+    cursor: pointer;
+}
+.tree-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.tree-row.on {
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+}
+.tree-row.drop {
+    outline: 1.5px dashed var(--color-accent);
+    background: rgba(91, 156, 255, 0.1);
+}
+.tree-row .row-more {
+    opacity: 0;
+}
+.tree-row:hover .row-more {
+    opacity: 1;
+}
+
+.main-card {
+    border-radius: 12px;
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+}
+.side-overlay {
+    position: absolute;
+    z-index: 40;
+    top: 0;
+    bottom: 0;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+.backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 4px 0 10px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-style: italic;
+    color: #bdbdbd;
+    background: rgba(255, 255, 255, 0.04);
+    max-width: 200px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.tab.on {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.feed-item {
+    position: absolute;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #262626;
+    cursor: pointer;
+}
+.feed-item img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.feed-item.sel {
+    outline: 2.5px solid var(--color-accent);
+    outline-offset: 2px;
+}
+.feed-item .meta {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 18px 8px 6px;
+    font-size: 11px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.feed-item:hover .meta {
+    opacity: 1;
+}
+
+.floating {
+    background: rgba(30, 30, 30, 0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+.note-editor {
+    position: absolute;
+    z-index: 20;
+    border: none;
+    outline: 2px solid var(--color-accent);
+    resize: none;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    border-radius: 6px;
+    transform-origin: center;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.skeleton {
+    background: linear-gradient(90deg, #232323, #2b2b2b, #232323);
+    background-size: 200% 100%;
+    animation: sk 1.3s infinite;
+}
+@keyframes sk {
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
+}
+.picker-bg {
+    background: radial-gradient(ellipse at 0% 0%, rgba(120, 90, 40, 0.25), transparent 50%),
+        radial-gradient(ellipse at 100% 100%, rgba(90, 60, 140, 0.22), transparent 50%),
+        radial-gradient(ellipse at 0% 100%, rgba(40, 90, 60, 0.18), transparent 45%), #141414;
+}
+.logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: #efefef;
+    color: #111;
+    display: grid;
+    place-items: center;
+    font-family: Georgia, serif;
+    font-weight: 700;
+    font-size: 18px;
+}
+.range {
+    accent-color: var(--color-accent);
+    width: 100%;
+}
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 4px 0 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #ddd;
+}
+.chip-auto {
+    background: rgba(91, 156, 255, 0.12);
+    color: #a8c8ff;
+}
+.swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    flex-shrink: 0;
+}
+.swatch.on {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+.swatch-none {
+    background: repeating-linear-gradient(45deg, #333 0 4px, #222 4px 8px);
+}
+.numfield {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #8f8f8f;
+}
+.numfield input {
+    width: 100%;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px 6px;
+    color: #eee;
+    font-size: 13px;
+    outline: none;
+}
+.numfield input:focus {
+    border-color: #5b9cff88;
+}
+
+@media (pointer: coarse) {
+    .ib {
+        min-width: 40px;
+        height: 40px;
+    }
+    .btn {
+        height: 40px;
+    }
+    .tree-row {
+        height: 38px;
+    }
+    .tree-row .row-more {
+        opacity: 1;
+    }
+    .nav-item {
+        height: 40px;
+    }
+    .swatch {
+        width: 30px;
+        height: 30px;
+    }
+}
