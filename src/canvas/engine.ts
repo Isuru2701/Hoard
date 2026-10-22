@@ -377,6 +377,10 @@ export class CanvasEngine {
         if (!this.selected.size) return [];
         return this.elements.filter((e) => this.selected.has(e.id));
     }
+    selectIds(ids: string[]) {
+        this.selected = new Set(ids.filter((id) => this.elements.some((el) => el.id === id)));
+        this.touch();
+    }
     setTool(t: Tool) {
         if (this.crop) this.applyCrop();
         this.tool = t;

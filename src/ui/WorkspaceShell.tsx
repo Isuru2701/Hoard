@@ -9,11 +9,11 @@ import RightPanel from './RightPanel.tsx';
 import Home from './views/Home.tsx';
 import { CollectionPage, FolderPage } from './views/Feed.tsx';
 import TrashView from './views/Trash.tsx';
-import { AutoTagger, TagManager } from './views/Tags.tsx';
 import SearchModal from './SearchModal.tsx';
 import Viewer from './Viewer.tsx';
 import CanvasView from '../canvas/CanvasView.tsx';
 import { track } from '../sdk/track.ts';
+import { Empty } from './kit.tsx';
 
 function useWidth() {
     const [w, setW] = useState(window.innerWidth);
@@ -25,7 +25,7 @@ function useWidth() {
     return w;
 }
 
-const TITLES: Record<string, string> = { home: 'Home', all: 'All', favorites: 'Favorites', trash: 'Trash', tags: 'Tag Manager', autotag: 'Auto Tagger' };
+const TITLES: Record<string, string> = { home: 'Home', all: 'All', favorites: 'Favorites', trash: 'Trash', tags: 'Tag Graph' };
 
 export function viewLabel(v: View): string {
     if (v.kind === 'folder') return basename(v.path);
@@ -126,6 +126,7 @@ function TabBar() {
 
 function ViewRouter() {
     const view = useStore((s) => s.view);
+    const tagGraphTag = useStore((s) => s.tagGraphTag);
     switch (view.kind) {
         case 'home':
             return <Home />;
@@ -142,9 +143,7 @@ function ViewRouter() {
         case 'trash':
             return <TrashView />;
         case 'tags':
-            return <TagManager />;
-        case 'autotag':
-            return <AutoTagger />;
+            return tagGraphTag ? <CollectionPage key={`tag-graph-${tagGraphTag}`} kind="tag" tag={tagGraphTag} /> : <div className="grid h-full place-items-center px-6"><Empty icon="tag" title="Select a tag">Select a node in the tag graph to see its images here.</Empty></div>;
     }
 }
 
@@ -153,6 +152,7 @@ export default function WorkspaceShell() {
     const rightOpen = useStore((s) => s.rightOpen);
     const fullscreen = useStore((s) => s.fullscreen);
     const scanned = useStore((s) => s.scan !== null);
+    const viewKind = useStore((s) => s.view.kind);
     const width = useWidth();
     const narrowL = width < 900;
     const narrowR = width < 1200;
@@ -173,6 +173,10 @@ export default function WorkspaceShell() {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, []);
+
+    useEffect(() => {
+        if (viewKind === 'tags' && !store.get().rightOpen) store.patch({ rightOpen: true });
+    }, [viewKind]);
 
     return (
         <div className="flex h-full flex-col">

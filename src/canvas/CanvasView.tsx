@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { store } from '../state/store.ts';
+import { store, useStore } from '../state/store.ts';
 import { canvasAssetsPath, getRoot, openMenu, pickFiles, registerCanvas, rescan, toast, toggleFullscreen } from '../state/actions.ts';
 import { DRAG_MIME, getFile, isMediaFile, joinPath } from '../lib/fs.ts';
 import { downloadBlob } from '../lib/zip.ts';
@@ -129,6 +129,7 @@ export default function CanvasView({ path }: { path: string }) {
     const [library, setLibrary] = useState(false);
     const [panel, setPanel] = useState(() => window.innerWidth >= 900);
     const [dragOver, setDragOver] = useState(false);
+    const pendingCanvasPaths = useStore((s) => s.pendingCanvasPaths);
     const assetsPath = canvasAssetsPath(path);
     useSyncExternalStore(engine ? engine.subscribe : noopSub, () => (engine ? engine.version : -1));
 
@@ -183,6 +184,20 @@ export default function CanvasView({ path }: { path: string }) {
             setEngine(null);
         };
     }, [path, wsId, assetsPath]);
+
+    useEffect(() => {
+        if (!engine || !getRoot()) return;
+        const pending = pendingCanvasPaths;
+        if (!pending || pending.canvasPath !== path) return;
+        const root = getRoot();
+        if (!root) return;
+        store.patch({ pendingCanvasPaths: null });
+        void Promise.all(pending.sourcePaths.map((sourcePath) => getFile(root, sourcePath)))
+            .then((files) => addFiles(files))
+            .catch(() => toast('Could not add the selected files to the canvas'));
+        // The pending request is consumed once this canvas is ready.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [engine, path, pendingCanvasPaths]);
 
     useEffect(() => {
         if (!isTauri()) return;
@@ -250,7 +265,18 @@ export default function CanvasView({ path }: { path: string }) {
             const text = dt.getData('text/plain');
             e.preventDefault();
             track('canvas_paste', { files: files.length });
-            if (files.length && text !== CLIP_MARKER) void addFiles(files, engine.pointerWorld());
+            const libraryPrefix = 'hoard:library-paths:';
+            if (text.startsWith(libraryPrefix)) {
+                try {
+                    const paths = JSON.parse(text.slice(libraryPrefix.length)) as unknown;
+                    if (Array.isArray(paths) && paths.every((p) => typeof p === 'string')) {
+                        const root = getRoot();
+                        if (root) void Promise.all(paths.map((path) => getFile(root, path))).then((selectedFiles) => addFiles(selectedFiles, engine.pointerWorld()));
+                    }
+                } catch {
+                    toast('The copied library selection is no longer available');
+                }
+            } else if (files.length && text !== CLIP_MARKER) void addFiles(files, engine.pointerWorld());
             else if (text && text !== CLIP_MARKER && !engine.hasClipboard) engine.addNote(text, engine.pointerWorld());
             else if (!engine.paste(engine.pointerWorld()) && text && text !== CLIP_MARKER) engine.addNote(text, engine.pointerWorld());
         };

@@ -1,7 +1,7 @@
 import type React from 'react';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react';
 import { store, useStore, type FeedSort } from '../../state/store.ts';
-import { createCanvas, createFolder, getRoot, importFiles, importInto, menuAt, navigate, openViewer, trashItems, updateItemMeta } from '../../state/actions.ts';
+import { addPathsToCanvas, createCanvas, createFolder, getRoot, importFiles, importInto, menuAt, navigate, openMenu, openViewer, toast, trashItems, updateItemMeta } from '../../state/actions.ts';
 import { DRAG_MIME } from '../../lib/fs.ts';
 import { findFolder, type FileEntry } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
@@ -255,8 +255,22 @@ export function Feed({ items, emptyText }: { items: FileEntry[]; emptyText: Reac
         if (!s.selection.includes(path)) store.patch({ selection: [path], focus: path });
         const sel = store.get().selection;
         const fav = !!s.meta.items[path]?.favorite;
+        const addToCanvas = () => {
+            const canvases = store.get().scan?.canvases ?? [];
+            if (!canvases.length) {
+                toast('Create a canvas first');
+                return;
+            }
+            openMenu(e.clientX, e.clientY, canvases.map((canvas) => ({
+                label: `Add to canvas: ${canvas.name}`,
+                icon: 'canvas' as const,
+                ev: 'feed_menu_add_to_canvas_target',
+                onClick: () => addPathsToCanvas(canvas.path, sel),
+            })));
+        };
         menuAt(e, [
             { label: 'Open', icon: 'maximize', ev: 'feed_menu_open', onClick: () => onOpen(path) },
+            { label: 'Add to canvas', icon: 'canvas', ev: 'feed_menu_add_to_canvas', onClick: addToCanvas },
             { label: fav ? 'Remove favorite' : 'Add to favorites', icon: 'heart', ev: 'feed_menu_favorite', onClick: () => sel.forEach((p) => updateItemMeta(p, { favorite: !fav })) },
             { label: 'Show info', icon: 'panelRight', ev: 'feed_menu_info', onClick: () => store.patch({ rightOpen: true, focus: path }) },
             { label: sel.length > 1 ? `Move ${sel.length} to trash` : 'Move to trash', icon: 'trash', danger: true, ev: 'feed_menu_trash', onClick: () => void trashItems(sel.map((p) => ({ path: p, type: 'file' as const }))) },
@@ -276,6 +290,10 @@ export function Feed({ items, emptyText }: { items: FileEntry[]; emptyText: Reac
                 e.preventDefault();
                 track('feed_select_all');
                 store.patch({ selection: paths, focus: null });
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && s.selection.length) {
+                e.preventDefault();
+                navigator.clipboard?.writeText(`hoard:library-paths:${JSON.stringify(s.selection)}`).catch(() => {});
+                toast(`${s.selection.length} item${s.selection.length === 1 ? '' : 's'} copied`);
             } else if (e.key === 'Escape') store.patch({ selection: [], focus: null });
             else if (e.key === ' ' && s.focus) {
                 e.preventDefault();

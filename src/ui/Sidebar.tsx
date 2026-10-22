@@ -209,8 +209,7 @@ export default function Sidebar({ overlay }: { overlay: boolean }) {
                         openMenu(r.left + 8, r.bottom, createMenuItems(currentFolder));
                     }}
                 />
-                <NavItem icon="sparkles" label="Auto Tagger" view={{ kind: 'autotag' }} ev="nav_autotag_clicked" />
-                <NavItem icon="tag" label="Tag Manager" view={{ kind: 'tags' }} ev="nav_tags_clicked" />
+                <NavItem icon="tag" label="Tag Graph" view={{ kind: 'tags' }} ev="nav_tags_clicked" />
             </nav>
             <div className={`mt-5 flex items-center justify-between rounded-lg pl-4 pr-2 ${rootDrop.over ? 'bg-accent/10' : ''}`} {...rootDrop.props}>
                 <span className="section-label">Folders</span>

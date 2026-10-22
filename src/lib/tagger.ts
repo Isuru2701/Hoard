@@ -13,45 +13,47 @@ export interface TaggerModel {
     license: string;
     url: string;
     dtype: 'fp32' | 'q8';
+    task: 'zero-shot-image-classification';
+    candidates: string[];
 }
 
 export const TAGGER_MODELS: TaggerModel[] = [
     {
-        id: 'wd14-vit-v2',
-        label: 'WD14 ViT v2',
-        size: '~373 MB',
-        description: 'Art-focused tagger with a large visual vocabulary. Best for anime, illustration and character art.',
-        model: 'SmilingWolf/wd-v1-4-vit-tagger-v2',
-        kind: 'art-tags',
-        license: 'MIT',
-        url: 'https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2',
-        dtype: 'fp32',
-    },
-    {
-        id: 'mobileclip-s2',
-        label: 'MobileCLIP-S2',
-        size: '<100 MB',
-        description: 'Small semantic image model. Good for broad concepts, but requires a prompt vocabulary for tags.',
-        model: 'Xenova/mobileclip_s2',
+        id: 'clip-vit-base-patch32',
+        label: 'CLIP ViT-B/32',
+        size: '~354 MB quantized',
+        description: 'A local zero-shot vision model for art references: subjects, mood, aesthetic, medium, and motifs.',
+        model: 'Xenova/clip-vit-base-patch32',
         kind: 'semantic',
-        license: 'OpenRAIL-M',
-        url: 'https://huggingface.co/Xenova/mobileclip_s2',
+        license: 'Apache-2.0',
+        url: 'https://huggingface.co/Xenova/clip-vit-base-patch32',
         dtype: 'q8',
+        task: 'zero-shot-image-classification',
+        candidates: [
+            'character design', 'creature design', 'environment design', 'costume design', 'portrait', 'figure',
+            'animal', 'architecture', 'interior', 'landscape', 'still life', 'prop design', 'vehicle',
+            'digital painting', 'concept art', 'illustration', 'anime', 'comic art', 'watercolor', 'oil painting',
+            'pencil sketch', 'line art', 'ink drawing', 'collage', '3d render', 'photograph', 'pixel art',
+            'abstract', 'minimalist', 'maximalist', 'surreal', 'geometric', 'ornate', 'organic', 'textured',
+            'warm', 'cool', 'muted', 'pastel', 'vibrant', 'monochrome', 'dark', 'bright', 'calm', 'dreamy',
+            'eerie', 'dramatic', 'playful', 'melancholic', 'romantic', 'futuristic', 'vintage', 'whimsical',
+            'floral motif', 'geometric motif', 'clouds', 'water', 'mountains', 'forest', 'stars', 'fire',
+            'flowers', 'foliage', 'weapons', 'armor', 'machinery', 'buildings', 'windows', 'textile pattern',
+        ],
     },
 ];
 
 const MODEL_KEY = 'hoard:tagger-model';
-const CUSTOM_MODEL_KEY = 'hoard:tagger-custom-model';
+const READY_KEY = 'hoard:tagger-ready';
 let selectedId = TAGGER_MODELS[0].id;
-let customModelValue = '';
 let loadedId: string | null = null;
 let classifier: ((input: Blob) => Promise<Array<{ label: string; score: number }>>) | null = null;
+type Classifier = (input: Blob) => Promise<Array<{ label: string; score: number }>>;
+const classifierCache = new Map<string, Classifier>();
+const loadingModels = new Map<string, Promise<Classifier>>();
 
 void idbGet<string>('kv', MODEL_KEY).then((value) => {
     if (value && TAGGER_MODELS.some((model) => model.id === value)) selectedId = value;
-});
-void idbGet<string>('kv', CUSTOM_MODEL_KEY).then((value) => {
-    if (value) customModelValue = value;
 });
 
 export function selectedTaggerModel(): TaggerModel | null {
@@ -59,41 +61,67 @@ export function selectedTaggerModel(): TaggerModel | null {
 }
 
 export function setSelectedTaggerModel(id: string): void {
+    if (!TAGGER_MODELS.some((model) => model.id === id)) return;
     selectedId = id;
     void idbSet('kv', MODEL_KEY, id);
-    loadedId = null;
-    classifier = null;
-}
-
-export function customTaggerModel(): string {
-    return customModelValue;
-}
-
-export function setCustomTaggerModel(value: string): void {
-    const model = value.trim();
-    customModelValue = model;
-    void idbSet('kv', CUSTOM_MODEL_KEY, model);
-    loadedId = null;
-    classifier = null;
+    activateCachedModel(selectedTaggerModel()?.model ?? '');
 }
 
 export async function loadTaggerModel(onProgress?: (value: number) => void): Promise<void> {
     const model = selectedTaggerModel() ?? TAGGER_MODELS[0];
-    const modelId = customTaggerModel() || model.model;
+    const modelId = model.model;
     if (loadedId === modelId && classifier) return;
-    const { pipeline } = await import('@huggingface/transformers');
-    const pipe = await pipeline('image-classification', modelId, {
-        dtype: model.dtype,
-        progress_callback: (event: ProgressInfo) => {
-            if (event.status === 'progress') onProgress?.(event.progress);
-        },
-    });
-    classifier = async (input) => (await pipe(input)) as Array<{ label: string; score: number }>;
+    const cached = classifierCache.get(modelId);
+    if (cached) {
+        activateModel(modelId, cached);
+        return;
+    }
+    let loading = loadingModels.get(modelId);
+    if (!loading) {
+        loading = (async () => {
+            const { pipeline } = await import('@huggingface/transformers');
+            const pipe = await pipeline(model.task, modelId, {
+                dtype: model.dtype,
+                progress_callback: (event: ProgressInfo) => {
+                    if (event.status === 'progress') onProgress?.(event.progress);
+                },
+            });
+            const modelClassifier: Classifier = async (input) =>
+                (await pipe(input, model.candidates)) as Array<{ label: string; score: number }>;
+            classifierCache.set(modelId, modelClassifier);
+            return modelClassifier;
+        })();
+        loadingModels.set(modelId, loading);
+        void loading.then(
+            () => loadingModels.delete(modelId),
+            () => loadingModels.delete(modelId)
+        );
+    }
+    classifier = await loading;
     loadedId = modelId;
+    void idbSet('kv', READY_KEY, modelId);
+}
+
+export async function taggerModelDownloaded(): Promise<boolean> {
+    return (await idbGet<string>('kv', READY_KEY)) === (selectedTaggerModel()?.model ?? '');
+}
+
+function activateModel(modelId: string, modelClassifier: Classifier): void {
+    loadedId = modelId;
+    classifier = modelClassifier;
+}
+
+function activateCachedModel(modelId: string): void {
+    const cached = classifierCache.get(modelId);
+    if (cached) activateModel(modelId, cached);
+    else {
+        loadedId = null;
+        classifier = null;
+    }
 }
 
 export async function tagWithModel(root: Dir, ref: MediaRef, maxTags: number): Promise<string[]> {
-    if (ref.kind === 'video') return ['video'];
+    if (ref.kind !== 'image') throw new Error('Auto-tagging is available for images only');
     await loadTaggerModel();
     if (!classifier) throw new Error('Tagger model is not loaded');
     const predictions = await classifier(await getFile(root, ref.path));

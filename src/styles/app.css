@@ -119,6 +119,11 @@ button:disabled {
     color: var(--color-fg);
     font-size: 13px;
     outline: none;
+    color-scheme: dark;
+}
+select.input option {
+    background: var(--color-panel);
+    color: var(--color-fg);
 }
 .input:focus {
     border-color: #5b9cff88;

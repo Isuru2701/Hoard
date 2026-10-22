@@ -55,20 +55,15 @@ registry. Images, videos, canvases, and `.hoard` metadata remain in that folder.
 
 ## Local model tagging
 
-Image tagging is explicit: select an image, choose a model in the right sidebar,
-download/prepare it, and then run **Tag this image**. Models run locally and
-generated suggestions are stored separately from manual tags.
+Image tagging is explicit and local. Open **Tag Graph** to download the included
+model once, choose the number of generated tags (5 by default), and auto-tag all
+images in the workspace. The same model can tag one selected image from the
+folder feed or canvas through the right sidebar. Generated suggestions are
+stored separately from manual tags.
 
-The included options are:
-
-- [WD14 ViT v2](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2) —
-  approximately 373 MB, art-focused vocabulary, best for anime, illustration
-  and character references.
-- [MobileCLIP-S2](https://huggingface.co/Xenova/mobileclip_s2) — smaller semantic
-  model for broad visual concepts.
-
-The model picker shows the estimated size and links to the model files and
-license. The custom model field accepts a Hugging Face model ID or a
-Transformers.js-compatible model URL. Custom models must remain below 500 MB
-and provide an image-classification ONNX model compatible with the selected
-runtime.
+The included model is [Xenova/clip-vit-base-patch32](https://huggingface.co/Xenova/clip-vit-base-patch32),
+approximately 354 MB in its quantized Transformers.js variant. It is a
+zero-shot image classifier prompted with art-reference concepts such as subject,
+mood, aesthetic, medium, and motifs. The UI shows the exact Hugging Face model,
+size, and license. Model weights are cached locally by Transformers.js and are
+reused on later runs; images and generated tags never leave the device.

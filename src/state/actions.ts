@@ -409,6 +409,12 @@ export function canvasName(path: string): string {
 }
 export const canvasAssetsPath = (path: string) => joinPath(dirname(path), canvasName(path) + ASSETS_SUFFIX);
 
+export function addPathsToCanvas(canvasPath: string, sourcePaths: string[]) {
+    if (!sourcePaths.length) return;
+    store.patch({ pendingCanvasPaths: { canvasPath, sourcePaths } });
+    navigate({ kind: 'canvas', path: canvasPath });
+}
+
 // ---------------------------------------------------------------- file operations
 export async function importFiles(folder: string, files: File[]): Promise<string[]> {
     if (!root) return [];

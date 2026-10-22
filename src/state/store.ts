@@ -11,7 +11,6 @@ export type View =
     | { kind: 'favorites' }
     | { kind: 'trash' }
     | { kind: 'tags' }
-    | { kind: 'autotag' }
     | { kind: 'tag'; tag: string }
     | { kind: 'folder'; path: string }
     | { kind: 'canvas'; path: string };
@@ -71,6 +70,8 @@ export interface AppState {
     collapsed: Record<string, boolean>;
     feedSize: FeedSize;
     feedSort: FeedSort;
+    tagGraphTag: string | null;
+    pendingCanvasPaths: { canvasPath: string; sourcePaths: string[] } | null;
 }
 
 const listeners = new Set<() => void>();
@@ -101,6 +102,8 @@ let state: AppState = {
     collapsed: {},
     feedSize: w < 600 ? 's' : 'm',
     feedSort: 'new',
+    tagGraphTag: null,
+    pendingCanvasPaths: null,
 };
 
 export const store = {

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { store, useStore } from '../state/store.ts';
-import { autoTagItem, canvasAssetsPath, canvasName, getRoot, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
+import { autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
 import { basename, getFile } from '../lib/fs.ts';
 import { findFolder, type FileEntry } from '../lib/scan.ts';
 import { getDims } from '../lib/thumbs.ts';
@@ -9,7 +9,7 @@ import { Btn, IconBtn, ThumbImg, formatBytes, formatDate } from './kit.tsx';
 import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
-import { customTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS } from '../lib/tagger.ts';
+import { TagManager } from './views/Tags.tsx';
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
 const CANVAS_SHORTCUTS = [
@@ -79,10 +79,6 @@ function TagEditor({ path }: { path: string }) {
     const auto = meta?.autoTags ?? [];
     const [maxAutoTags, setMaxAutoTags] = useState(5);
     const [tagging, setTagging] = useState(false);
-    const [modelId, setModelId] = useState(() => selectedTaggerModel()?.id ?? TAGGER_MODELS[0].id);
-    const [customModel, setCustomModel] = useState(() => customTaggerModel());
-    const [loadingModel, setLoadingModel] = useState(false);
-    const [modelProgress, setModelProgress] = useState(0);
     const add = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -100,19 +96,6 @@ function TagEditor({ path }: { path: string }) {
             setTagging(false);
         }
     };
-    const prepareModel = async () => {
-        if (loadingModel) return;
-        setLoadingModel(true);
-        setModelProgress(0);
-        try {
-            await loadTaggerModel(setModelProgress);
-        } catch (error) {
-            console.warn('[autotag] model download failed', error);
-            toast('Could not download the selected model');
-        } finally {
-            setLoadingModel(false);
-        }
-    };
     return (
         <div>
             <div className="mb-3 rounded-lg border border-line bg-white/[0.025] p-2.5">
@@ -128,39 +111,13 @@ function TagEditor({ path }: { path: string }) {
                         {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} max</option>)}
                     </select>
                 </div>
-                <select
-                    className="input mt-2 !h-8 !py-1 text-xs"
-                    aria-label="Tagging model"
-                    value={modelId}
-                    onChange={(e) => {
-                        setModelId(e.target.value);
-                        setSelectedTaggerModel(e.target.value);
-                    }}
-                >
-                    {TAGGER_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.size}</option>)}
-                </select>
-                <div className="mt-1 text-[10px] leading-relaxed text-muted">{selectedTaggerModel()?.description}</div>
-                {selectedTaggerModel() && (
-                    <a className="mt-1 inline-block text-[10px] text-accent hover:underline" href={selectedTaggerModel()!.url} target="_blank" rel="noreferrer">
-                        Model page, files and license ↗
-                    </a>
-                )}
-                <button className="btn btn-subtle mt-2 h-8 w-full justify-center text-xs" disabled={loadingModel} onClick={() => void prepareModel()}>
-                    <Icon name="download" size={13} />
-                    {loadingModel ? `Downloading… ${Math.round(modelProgress)}%` : 'Download / prepare model'}
-                </button>
-                <button className="btn btn-primary mt-2 h-8 w-full justify-center text-xs" disabled={tagging || loadingModel} onClick={() => void runAutoTag()}>
+                <button className="btn btn-primary mt-2 h-8 w-full justify-center text-xs" disabled={tagging} onClick={() => void runAutoTag()}>
                     <Icon name="sparkles" size={13} />
                     {tagging ? 'Analysing…' : 'Tag this image'}
                 </button>
-                <input
-                    className="input mt-2 !h-8 !py-1 text-[10px]"
-                    placeholder="Custom Transformers.js model ID or URL"
-                    value={customModel}
-                    onChange={(e) => setCustomModel(e.target.value)}
-                    onBlur={() => setCustomTaggerModel(customModel)}
-                />
-                <div className="mt-1.5 text-[10px] leading-relaxed text-muted">Models download locally and run on this device. Custom models must be Transformers.js-compatible and under 500 MB.</div>
+                <button className="mt-2 text-left text-[10px] text-accent hover:underline" onClick={() => navigate({ kind: 'tags' })}>
+                    Configure the local model in Tag Graph →
+                </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
                 {tags.map((t) => (
@@ -383,13 +340,14 @@ export default function RightPanel({ overlay }: { overlay: boolean }) {
     const view = useStore((s) => s.view);
     const entry = useStore((s) => (s.focus ? s.scan?.byPath.get(s.focus) : undefined));
     let body: ReactNode;
-    if (selection.length > 1) body = <MultiPanel paths={selection} />;
+    if (view.kind === 'tags') body = <TagManager />;
+    else if (selection.length > 1) body = <MultiPanel paths={selection} />;
     else if (focus && entry) body = <FilePanel key={entry.path} entry={entry} />;
     else if (view.kind === 'folder') body = <FolderPanel path={view.path} />;
     else if (view.kind === 'canvas') body = <CanvasInfo path={view.path} />;
     else body = <HomePanel />;
     return (
-        <aside className={`w-[300px] shrink-0 overflow-y-auto bg-bg ${overlay ? 'side-overlay right-0' : ''}`}>
+        <aside className={`${view.kind === 'tags' ? 'w-[min(520px,45vw)] min-w-[380px]' : 'w-[300px]'} shrink-0 overflow-y-auto bg-bg ${overlay ? 'side-overlay right-0' : ''}`}>
             {overlay && (
                 <div className="flex justify-end p-2">
                     <IconBtn icon="x" title="Close panel" ev="ui_right_panel_closed" onClick={() => store.patch({ rightOpen: false })} />
