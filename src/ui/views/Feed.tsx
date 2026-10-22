@@ -8,7 +8,6 @@ import { allTags } from '../../lib/meta.ts';
 import { getDims, getDimsVersion, getThumbUrl, subscribeDims } from '../../lib/thumbs.ts';
 import { Btn, Empty, IconBtn } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
-import { track } from '../../sdk/track.ts';
 import { isTauri, nativeFile } from '../../lib/tauriFs.ts';
 
 export function sortItems(items: FileEntry[], sort: FeedSort): FileEntry[] {

@@ -7,7 +7,6 @@ import { allTags } from '../../lib/meta.ts';
 import { Btn, ThumbImg } from '../kit.tsx';
 import { Icon, type IconName } from '../Icon.tsx';
 import { DropImport } from './Feed.tsx';
-import { track } from '../../sdk/track.ts';
 
 function Stat({ icon, n, label, onClick }: { icon: IconName; n: number; label: string; onClick?: () => void }) {
     return (

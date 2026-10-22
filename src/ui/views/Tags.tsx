@@ -5,7 +5,6 @@ import { activeTaggerModel, addTaggerModel, cancelTaggerDownloads, deleteTaggerM
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
-import { track } from '../../sdk/track.ts';
 
 interface TagNode {
     tag: string;

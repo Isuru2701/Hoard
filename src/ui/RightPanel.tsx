@@ -249,13 +249,13 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                 <TagEditor path={entry.path} />
             </Section>
             <Section title="Content">
-                <textarea className="ghost-input" rows={2} placeholder="Add a description…" value={meta.description ?? ''} onChange={(e) => updateItemMeta(entry.path, { description: e.target.value })} onBlur={() => track('meta_description_edited')} />
-                <textarea className="ghost-input mt-2" rows={3} placeholder="Add notes…" value={meta.notes ?? ''} onChange={(e) => updateItemMeta(entry.path, { notes: e.target.value })} onBlur={() => track('meta_notes_edited')} />
+                <textarea className="ghost-input" rows={2} placeholder="Add a description…" value={meta.description ?? ''} onChange={(e) => updateItemMeta(entry.path, { description: e.target.value })} />
+                <textarea className="ghost-input mt-2" rows={3} placeholder="Add notes…" value={meta.notes ?? ''} onChange={(e) => updateItemMeta(entry.path, { notes: e.target.value })}  />
             </Section>
             <Section title="Attribution">
-                <input className="ghost-input" placeholder="Creator name…" value={meta.creator ?? ''} onChange={(e) => updateItemMeta(entry.path, { creator: e.target.value })} onBlur={() => track('meta_creator_edited')} />
+                <input className="ghost-input" placeholder="Creator name…" value={meta.creator ?? ''} onChange={(e) => updateItemMeta(entry.path, { creator: e.target.value })} />
                 <div className="flex items-center gap-1">
-                    <input className="ghost-input" placeholder="https://… (source link)" value={meta.source ?? ''} onChange={(e) => updateItemMeta(entry.path, { source: e.target.value })} onBlur={() => track('meta_source_edited')} />
+                    <input className="ghost-input" placeholder="https://… (source link)" value={meta.source ?? ''} onChange={(e) => updateItemMeta(entry.path, { source: e.target.value })}/>
                     {meta.source && /^https?:\/\//.test(meta.source) && (
                         <IconBtn icon="external" title="Open source link" ev="meta_source_opened" onClick={() => window.open(meta.source, '_blank', 'noopener')} />
                     )}

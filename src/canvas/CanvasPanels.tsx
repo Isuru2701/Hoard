@@ -47,7 +47,7 @@ function Slider({ label, value, min, max, onChange }: { label: string; value: nu
                 <span>{label}</span>
                 <span>{Math.round(value)}</span>
             </div>
-            <input type="range" className="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} onPointerUp={() => track('canvas_panel_slider_changed', { field: label })} />
+            <input type="range" className="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
         </label>
     );
 }
