@@ -103,3 +103,9 @@ export function nativeRoot(path: string): Dir {
 export async function revealNativePath(path: string): Promise<void> {
     await invoke('reveal_path', { path });
 }
+
+export async function nativeFile(path: string): Promise<File> {
+    const result = await invoke<NativeFile>('read_file', { path });
+    const bytes = base64ToBytes(result.data);
+    return new File([bytes.buffer as ArrayBuffer], result.name, { lastModified: result.modified });
+}

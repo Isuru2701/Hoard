@@ -11,6 +11,7 @@ import { IconBtn } from '../ui/kit.tsx';
 import type { IconName } from '../ui/Icon.tsx';
 import { LibraryDrawer, NoteEditor, SelectionPanel } from './CanvasPanels.tsx';
 import { track } from '../sdk/track.ts';
+import { isTauri, nativeFile } from '../lib/tauriFs.ts';
 
 const CLIP_MARKER = 'hoard:canvas-elements';
 const noopSub = () => () => {};
@@ -183,6 +184,21 @@ export default function CanvasView({ path }: { path: string }) {
         };
     }, [path, wsId, assetsPath]);
 
+    useEffect(() => {
+        if (!isTauri()) return;
+        let unlisten: (() => void) | undefined;
+        void import('@tauri-apps/api/webview').then(async ({ getCurrentWebview }) => {
+            unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+                if (event.payload.type !== 'drop' || !event.payload.paths.length || !wrapRef.current) return;
+                const rect = wrapRef.current.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                const at = engine?.toWorld(event.payload.position.x / dpr - rect.left, event.payload.position.y / dpr - rect.top);
+                void Promise.all(event.payload.paths.map(nativeFile)).then((files) => addFiles(files, at));
+            });
+        });
+        return () => unlisten?.();
+    }, [engine]);
+
     const addFiles = async (files: File[], at?: Pt) => {
         const root = getRoot();
         if (!root || !engine) return;
@@ -320,6 +336,7 @@ export default function CanvasView({ path }: { path: string }) {
                         <div className="mx-1 h-5 w-px shrink-0 bg-line" />
                         <IconBtn icon="undo" title="Undo (Ctrl+Z)" ev="canvas_undo_clicked" disabled={!engine.canUndo} onClick={() => engine.undo()} />
                         <IconBtn icon="redo" title="Redo (Ctrl+Shift+Z)" ev="canvas_redo_clicked" disabled={!engine.canRedo} onClick={() => engine.redo()} />
+                        <IconBtn icon="grid" title="Snap to grid" ev="canvas_snap_grid_clicked" active={engine.snapToGrid} onClick={() => engine.toggleSnapToGrid()} />
                     </div>
 
                     <StyleBar engine={engine} left={library ? 284 : 12} />
@@ -356,6 +373,9 @@ export default function CanvasView({ path }: { path: string }) {
                                 <IconBtn icon={sel.every((e) => e.locked) ? 'unlock' : 'lock'} title="Lock / unlock" ev="canvas_lock_clicked" onClick={() => engine.toggleLock()} />
                                 {single?.type === 'image' && <IconBtn icon="crop" title="Crop (double-click image)" ev="canvas_crop_clicked" onClick={() => engine.startCrop(single.id)} />}
                                 {sel.length > 1 && <IconBtn icon="grid" title="Tidy into rows" ev="canvas_tidy_clicked" onClick={() => engine.tidy()} />}
+                                {sel.length > 1 && <IconBtn icon="alignLeft" title="Arrange horizontally" ev="canvas_arrange_horizontal_clicked" onClick={() => engine.arrange('horizontal')} />}
+                                {sel.length > 1 && <IconBtn icon="alignTop" title="Arrange vertically" ev="canvas_arrange_vertical_clicked" onClick={() => engine.arrange('vertical')} />}
+                                {sel.length > 1 && <IconBtn icon="maximize" title="Resize to same size" ev="canvas_match_size_clicked" onClick={() => engine.matchSize()} />}
                                 <IconBtn icon="download" title="Export selection as PNG (Ctrl+Shift+C copies)" ev="canvas_export_clicked" onClick={() => void exportPng(engine, 'download')} />
                                 <IconBtn icon="sliders" title="Selection panel" ev="canvas_panel_toggled" active={panel} onClick={() => setPanel(!panel)} />
                                 <IconBtn icon="trash" title="Delete" ev="canvas_delete_clicked" danger onClick={() => engine.deleteSelected()} />

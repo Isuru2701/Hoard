@@ -170,6 +170,7 @@ export class CanvasEngine {
     tool: Tool = 'select';
     style: DrawStyle = { stroke: '#e5e5e5', fill: 'transparent', sw: 2, noteBg: '#fde68a', fontSize: 18 };
     cam: Camera = { ox: 0, oy: 0, z: 1 };
+    snapToGrid = false;
     editingId: string | null = null;
     crop: CropState | null = null;
     version = 0;
@@ -399,6 +400,39 @@ export class CanvasEngine {
     clearSelection() {
         this.selected = new Set();
         this.touch();
+    }
+    toggleSnapToGrid() {
+        this.snapToGrid = !this.snapToGrid;
+        this.onAction('snap_toggled', { enabled: this.snapToGrid });
+        this.touch();
+    }
+    arrange(direction: 'horizontal' | 'vertical') {
+        const sel = this.selectedEls().filter((e) => !e.locked);
+        if (sel.length < 2) return;
+        const sorted = sel.slice().sort((a, b) => direction === 'horizontal' ? a.x - b.x : a.y - b.y);
+        const gap = 24;
+        let cursor = direction === 'horizontal' ? Math.min(...sorted.map((e) => e.x)) : Math.min(...sorted.map((e) => e.y));
+        const positions = new Map<string, { x: number; y: number }>();
+        for (const item of sorted) {
+            positions.set(item.id, direction === 'horizontal' ? { x: cursor, y: sorted[0].y } : { x: sorted[0].x, y: cursor });
+            cursor += (direction === 'horizontal' ? item.w : item.h) + gap;
+        }
+        this.elements = this.elements.map((e) => {
+            const position = positions.get(e.id);
+            return position ? ({ ...e, ...position } as El) : e;
+        });
+        this.commit();
+        this.onAction('arranged', { direction, count: sel.length });
+    }
+    matchSize() {
+        const sel = this.selectedEls().filter((e) => !e.locked);
+        if (sel.length < 2) return;
+        const w = sel[0].w;
+        const h = sel[0].h;
+        const ids = new Set(sel.map((e) => e.id));
+        this.elements = this.elements.map((e) => ids.has(e.id) ? ({ ...e, w, h } as El) : e);
+        this.commit();
+        this.onAction('matched_size', { count: sel.length });
     }
 
     // ------------------------------------------------------------ editing commands
@@ -936,7 +970,11 @@ export class CanvasEngine {
                 ia.moved = true;
                 this.elements = this.elements.map((e) => {
                     const o = ia.orig.get(e.id);
-                    return o ? ({ ...e, x: o.x + dx, y: o.y + dy } as El) : e;
+                    if (!o) return e;
+                    const x = o.x + dx;
+                    const y = o.y + dy;
+                    const step = 32;
+                    return { ...e, x: this.snapToGrid ? Math.round(x / step) * step : x, y: this.snapToGrid ? Math.round(y / step) * step : y } as El;
                 });
                 break;
             }

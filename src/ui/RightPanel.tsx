@@ -10,6 +10,24 @@ import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
+const CANVAS_SHORTCUTS = [
+    ['V', 'Select'],
+    ['H', 'Hand / pan'],
+    ['N', 'Sticky note'],
+    ['T', 'Text'],
+    ['R', 'Rectangle'],
+    ['O', 'Ellipse'],
+    ['L', 'Line'],
+    ['A', 'Arrow'],
+    ['P', 'Pen'],
+    ['E', 'Eraser'],
+    ['Ctrl + Z', 'Undo'],
+    ['Ctrl + D', 'Duplicate'],
+    ['[  ]', 'Layer order'],
+    ['Shift + 1', 'Fit canvas'],
+    ['Ctrl + Shift + C', 'Copy as PNG'],
+    ['Ctrl + scroll', 'Zoom'],
+] as const;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
     return (
@@ -231,11 +249,19 @@ function CanvasInfo({ path }: { path: string }) {
                 <Row k="File" v={basename(path)} />
                 <Row k="Images saved in" v={canvasAssetsPath(path)} />
             </Section>
-            <div className="border-t border-line p-4 text-xs leading-relaxed text-muted">
-                Select a single image on the canvas to edit its tags, source and notes here.
-                <br />
-                <br />
-                Shortcuts: V select · H hand · N note · T text · R rectangle · O ellipse · L line · A arrow · P pen · E eraser · Ctrl+Z undo · Ctrl+D duplicate · [ ] layer order · Shift+1 fit · Ctrl+Shift+C copy as PNG · Ctrl+scroll zoom
+            <div className="border-t border-line p-4">
+                <p className="text-xs leading-relaxed text-muted">Select a single image on the canvas to edit its tags, source and notes here.</p>
+                <div className="mt-4">
+                    <div className="section-label mb-2">Shortcuts</div>
+                    <div className="space-y-1">
+                        {CANVAS_SHORTCUTS.map(([key, label]) => (
+                            <div key={key} className="flex items-center gap-3 rounded-md px-1 py-1 text-xs">
+                                <kbd className="min-w-[76px] rounded border border-line bg-white/[0.06] px-1.5 py-1 text-center font-mono text-[10px] font-medium text-fg shadow-sm">{key}</kbd>
+                                <span className="text-muted">{label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </>
     );

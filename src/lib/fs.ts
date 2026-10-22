@@ -85,9 +85,13 @@ export async function entryKind(dir: Dir, name: string): Promise<'file' | 'direc
     try {
         await dir.getFileHandle(name);
         return 'file';
-    } catch (e) {
-        if ((e as DOMException)?.name === 'TypeMismatchError') return 'directory';
-        return null;
+    } catch {
+        try {
+            await dir.getDirectoryHandle(name);
+            return 'directory';
+        } catch {
+            return null;
+        }
     }
 }
 

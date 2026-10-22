@@ -9,6 +9,7 @@ import { getDims, getDimsVersion, getThumbUrl, subscribeDims } from '../../lib/t
 import { Btn, Empty, IconBtn } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
 import { track } from '../../sdk/track.ts';
+import { isTauri, nativeFile } from '../../lib/tauriFs.ts';
 
 export function sortItems(items: FileEntry[], sort: FeedSort): FileEntry[] {
     if (sort === 'new') return items;
@@ -21,9 +22,28 @@ export function sortItems(items: FileEntry[], sort: FeedSort): FileEntry[] {
 /** Wraps a view so OS files dropped onto it are imported into `folder`. */
 export function DropImport({ folder, children }: { folder: string; children: ReactNode }) {
     const [over, setOver] = useState(false);
+    const wrapRef = useRef<HTMLDivElement>(null);
     const isFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
+    useEffect(() => {
+        if (!isTauri()) return;
+        let unlisten: (() => void) | undefined;
+        void import('@tauri-apps/api/webview').then(async ({ getCurrentWebview }) => {
+            unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+                if (event.payload.type !== 'drop' || !event.payload.paths.length || !wrapRef.current) return;
+                const rect = wrapRef.current.getBoundingClientRect();
+                const p = event.payload.position;
+                const dpr = window.devicePixelRatio || 1;
+                const x = p.x / dpr;
+                const y = p.y / dpr;
+                if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+                void Promise.all(event.payload.paths.map(nativeFile)).then((files) => importFiles(folder, files));
+            });
+        });
+        return () => unlisten?.();
+    }, [folder]);
     return (
         <div
+            ref={wrapRef}
             className="relative flex h-full flex-col"
             onDragOver={(e) => {
                 if (isFiles(e)) {

@@ -40,7 +40,8 @@ export async function scanWorkspace(root: Dir): Promise<ScanResult> {
     const folders: FolderNode[] = [];
 
     async function walk(dir: Dir, path: string, hidden: boolean): Promise<FolderNode> {
-        const node: FolderNode = { path, name: path ? basename(path) : 'Workspace', children: [], canvases: [], mediaCount: 0, totalCount: 0 };
+        const leaf = path ? basename(path) : 'Workspace';
+        const node: FolderNode = { path, name: leaf.endsWith(ASSETS_SUFFIX) ? leaf.slice(0, -ASSETS_SUFFIX.length) : leaf, children: [], canvases: [], mediaCount: 0, totalCount: 0 };
         const jobs: Promise<void>[] = [];
         for (const [name, handle] of await entries(dir)) {
             if (name.startsWith('.')) continue;
@@ -48,8 +49,8 @@ export async function scanWorkspace(root: Dir): Promise<ScanResult> {
             if (handle.kind === 'directory') {
                 const isAssets = name.endsWith(ASSETS_SUFFIX);
                 jobs.push(
-                    walk(handle as Dir, p, hidden || isAssets).then((child) => {
-                        if (!isAssets && !hidden) {
+                    walk(handle as Dir, p, hidden).then((child) => {
+                        if (!hidden) {
                             node.children.push(child);
                             folders.push(child);
                             node.totalCount += child.totalCount;
