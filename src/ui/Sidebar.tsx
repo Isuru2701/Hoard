@@ -213,7 +213,10 @@ export default function Sidebar({ overlay }: { overlay: boolean }) {
             </nav>
             <div className={`mt-5 flex items-center justify-between rounded-lg pl-4 pr-2 ${rootDrop.over ? 'bg-accent/10' : ''}`} {...rootDrop.props}>
                 <span className="section-label">Folders</span>
-                <IconBtn icon="folderPlus" title="New folder" ev="sidebar_new_folder_clicked" size={14} onClick={() => void createFolder('')} />
+                <div className="flex items-center gap-1">
+                    <IconBtn icon="folderPlus" title="New folder" ev="sidebar_new_folder_clicked" size={14} onClick={() => void createFolder('')} />
+                    <IconBtn icon="canvas" title="New canvas" ev="sidebar_new_canvas_clicked" size={14} onClick={() => void createCanvas('')} />
+                </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 {scan && <TreeChildren node={scan.tree} depth={0} />}

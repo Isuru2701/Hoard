@@ -239,12 +239,18 @@ export async function openWorkspace(id: string): Promise<boolean> {
         fwd: [],
         selection: [],
         focus: null,
-        screen: 'workspace',
+        screen: 'picker',
     });
     track('workspace_opened', { kind: rec.kind });
     if (rec.kind === 'browser' && usingMemoryStorage)
         toast('This window blocks saving files, so this workspace only lasts until you close it. Download the app and host it to save for real.');
     await rescan();
+    if (!store.get().scan) {
+        root = null;
+        store.patch({ wsId: null, screen: 'picker', selection: [], focus: null });
+        toast('Could not load that workspace');
+        return false;
+    }
     if (isTauri()) {
         const current = store.get();
         const view = restoreView(current.view);
@@ -253,6 +259,7 @@ export async function openWorkspace(id: string): Promise<boolean> {
             || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path));
         store.patch({ view: valid ? view : { kind: 'home' } });
     }
+    store.patch({ screen: 'workspace' });
     return true;
 }
 

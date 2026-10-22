@@ -75,7 +75,7 @@ function graphLayout(tags: Map<string, number>, edges: TagEdge[]): TagNode[] {
 
 export function TagManager() {
     const items = useStore((s) => s.meta.items);
-    const scan = useStore((s) => s.scan)!;
+    const scan = useStore((s) => s.scan);
     const [query, setQuery] = useState('');
     const selected = useStore((s) => s.tagGraphTag);
     const depth = useStore((s) => s.tagGraphDepth);
@@ -96,7 +96,7 @@ export function TagManager() {
     const suppressNodeClick = useRef(false);
     const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>({});
     const model = activeTaggerModel();
-    const imageFiles = useMemo(() => scan.files.filter((file) => !file.hidden && file.kind === 'image'), [scan]);
+    const imageFiles = useMemo(() => scan?.files.filter((file) => !file.hidden && file.kind === 'image') ?? [], [scan]);
 
     const prepareModel = async () => {
         if (loadingModel) return;
@@ -161,6 +161,7 @@ export function TagManager() {
     const { tags, edges, nodes } = useMemo(() => {
         const counts = new Map<string, number>();
         const itemTags: string[][] = [];
+        if (!scan) return { tags: counts, edges: [], nodes: [] };
         for (const [path, meta] of Object.entries(items)) {
             if (!scan.byPath.has(path)) continue;
             const current = [...new Set(allTags(meta).map(keyFor).filter(Boolean))];
