@@ -127,6 +127,7 @@ function TabBar() {
 function ViewRouter() {
     const view = useStore((s) => s.view);
     const tagGraphTag = useStore((s) => s.tagGraphTag);
+    const tagGraphDepth = useStore((s) => s.tagGraphDepth);
     switch (view.kind) {
         case 'home':
             return <Home />;
@@ -143,7 +144,7 @@ function ViewRouter() {
         case 'trash':
             return <TrashView />;
         case 'tags':
-            return tagGraphTag ? <CollectionPage key={`tag-graph-${tagGraphTag}`} kind="tag" tag={tagGraphTag} /> : <div className="grid h-full place-items-center px-6"><Empty icon="tag" title="Select a tag">Select a node in the tag graph to see its images here.</Empty></div>;
+            return tagGraphTag ? <CollectionPage key={`tag-graph-${tagGraphTag}`} kind="tag" tag={tagGraphTag} tagDepth={tagGraphDepth} /> : <div className="grid h-full place-items-center px-6"><Empty icon="tag" title="Select a tag">Select a node in the tag graph to see its images here.</Empty></div>;
     }
 }
 

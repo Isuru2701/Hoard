@@ -71,6 +71,7 @@ export interface AppState {
     feedSize: FeedSize;
     feedSort: FeedSort;
     tagGraphTag: string | null;
+    tagGraphDepth: number;
     pendingCanvasPaths: { canvasPath: string; sourcePaths: string[] } | null;
 }
 
@@ -103,6 +104,7 @@ let state: AppState = {
     feedSize: w < 600 ? 's' : 'm',
     feedSort: 'new',
     tagGraphTag: null,
+    tagGraphDepth: 0,
     pendingCanvasPaths: null,
 };
 

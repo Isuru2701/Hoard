@@ -368,16 +368,26 @@ export function FolderPage({ path }: { path: string }) {
     );
 }
 
-export function CollectionPage({ kind, tag }: { kind: 'all' | 'favorites' | 'tag'; tag?: string }) {
+export function CollectionPage({ kind, tag, tagDepth = 0 }: { kind: 'all' | 'favorites' | 'tag'; tag?: string; tagDepth?: number }) {
     const scan = useStore((s) => s.scan)!;
     const metaItems = useStore((s) => s.meta.items);
     const sort = useStore((s) => s.feedSort);
+    const setTagDepth = (value: number) => store.patch({ tagGraphDepth: value });
     const items = useMemo(() => {
         let list = scan.files.filter((f) => !f.hidden && f.kind !== 'file');
         if (kind === 'favorites') list = list.filter((f) => metaItems[f.path]?.favorite);
-        if (kind === 'tag' && tag) list = list.filter((f) => allTags(metaItems[f.path]).includes(tag));
+        if (kind === 'tag' && tag) {
+            const related = new Set([tag.toLocaleLowerCase()]);
+            for (let level = 0; level < tagDepth; level++) {
+                for (const file of list) {
+                    const tags = allTags(metaItems[file.path]).map((itemTag) => itemTag.trim().toLocaleLowerCase());
+                    if (tags.some((itemTag) => related.has(itemTag))) tags.forEach((itemTag) => related.add(itemTag));
+                }
+            }
+            list = list.filter((f) => allTags(metaItems[f.path]).some((itemTag) => related.has(itemTag.trim().toLocaleLowerCase())));
+        }
         return sortItems(list, sort);
-    }, [scan, metaItems, kind, tag, sort]);
+    }, [scan, metaItems, kind, tag, tagDepth, sort]);
     const title = kind === 'all' ? 'All' : kind === 'favorites' ? 'Favorites' : `#${tag}`;
     const empty = kind === 'favorites' ? 'Tap the heart on any image to collect it here.' : kind === 'tag' ? 'No images have this tag.' : 'Import images to start your collection.';
     return (
@@ -386,11 +396,17 @@ export function CollectionPage({ kind, tag }: { kind: 'all' | 'favorites' | 'tag
                 title={title}
                 subtitle={`${items.length} items`}
                 actions={
-                    kind === 'all' && (
+                    kind === 'tag' && tag ? (
+                        <label className="flex items-center gap-2 text-xs text-muted">
+                            Include nearby tags
+                            <input type="range" min="0" max="3" step="1" value={tagDepth} onChange={(e) => setTagDepth(Number(e.target.value))} />
+                            <span className="w-6 text-right text-fg">{tagDepth}</span>
+                        </label>
+                    ) : kind === 'all' ? (
                         <Btn ev="all_import_clicked" variant="subtle" icon="upload" onClick={() => void importInto('Inbox')}>
                             Import
                         </Btn>
-                    )
+                    ) : null
                 }
             />
             <Feed items={items} emptyText={empty} />

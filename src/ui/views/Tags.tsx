@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
-import { applyAutoTags, getRoot, navigate, toast } from '../../state/actions.ts';
-import { loadTaggerModel, selectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
+import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
+import { activeTaggerModel, customTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded, validCustomTaggerModel } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
-import { Feed } from './Feed.tsx';
 import { track } from '../../sdk/track.ts';
 
 interface TagNode {
@@ -21,36 +20,16 @@ interface TagEdge {
     weight: number;
 }
 
-const WIDTH = 900;
-const HEIGHT = 470;
+interface NodePosition {
+    x: number;
+    y: number;
+}
+
+const WIDTH = 720;
+const HEIGHT = 720;
 
 function keyFor(tag: string): string {
     return tag.trim().toLocaleLowerCase();
-}
-
-function graphLayout(tags: Map<string, number>, edges: TagEdge[]): TagNode[] {
-    const degree = new Map<string, number>();
-    for (const edge of edges) {
-        degree.set(edge.a, (degree.get(edge.a) ?? 0) + edge.weight);
-        degree.set(edge.b, (degree.get(edge.b) ?? 0) + edge.weight);
-    }
-    const ordered = [...tags.keys()].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (tags.get(b) ?? 0) - (tags.get(a) ?? 0) || a.localeCompare(b));
-    const cx = WIDTH / 2;
-    const cy = HEIGHT / 2;
-    return ordered.map((tag, index) => {
-        const ring = Math.floor(Math.sqrt(index + 1));
-        const first = ring * ring;
-        const slots = Math.max(1, ring * 8);
-        const position = index - first;
-        const radius = ring === 0 ? 0 : Math.min(205, 70 + ring * 58);
-        const angle = (position / slots) * Math.PI * 2 - Math.PI / 2;
-        return {
-            tag,
-            count: tags.get(tag) ?? 0,
-            x: cx + Math.cos(angle) * radius,
-            y: cy + Math.sin(angle) * radius,
-        };
-    });
 }
 
 function neighborhood(start: string, edges: TagEdge[], depth: number): Set<string> {
@@ -68,26 +47,62 @@ function neighborhood(start: string, edges: TagEdge[], depth: number): Set<strin
     return result;
 }
 
+function graphLayout(tags: Map<string, number>, edges: TagEdge[]): TagNode[] {
+    const degree = new Map<string, number>();
+    for (const edge of edges) {
+        degree.set(edge.a, (degree.get(edge.a) ?? 0) + edge.weight);
+        degree.set(edge.b, (degree.get(edge.b) ?? 0) + edge.weight);
+    }
+    const ordered = [...tags.keys()].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (tags.get(b) ?? 0) - (tags.get(a) ?? 0) || a.localeCompare(b));
+    const cx = WIDTH / 2;
+    const cy = HEIGHT / 2;
+    return ordered.map((tag, index) => {
+        if (index === 0) return { tag, count: tags.get(tag) ?? 0, x: cx, y: cy };
+        const ring = Math.ceil(Math.sqrt(index + 1)) - 1;
+        const first = ring * ring + 1;
+        const slots = Math.max(1, ring * 8);
+        const position = index - first;
+        const radius = Math.min(285, 112 + (ring - 1) * 92);
+        const angle = (position / slots) * Math.PI * 2 - Math.PI / 2;
+        return {
+            tag,
+            count: tags.get(tag) ?? 0,
+            x: cx + Math.cos(angle) * radius,
+            y: cy + Math.sin(angle) * radius,
+        };
+    });
+}
+
 export function TagManager() {
     const items = useStore((s) => s.meta.items);
     const scan = useStore((s) => s.scan)!;
     const [query, setQuery] = useState('');
     const selected = useStore((s) => s.tagGraphTag);
-    const [depth, setDepth] = useState(0);
+    const depth = useStore((s) => s.tagGraphDepth);
     const [running, setRunning] = useState(false);
     const [done, setDone] = useState(0);
     const [maxTags, setMaxTags] = useState(5);
     const [loadingModel, setLoadingModel] = useState(false);
     const [modelProgress, setModelProgress] = useState(0);
     const [modelDownloaded, setModelDownloaded] = useState(false);
+    const [customModel, setCustomModel] = useState(() => customTaggerModel());
+    const [selectedModelId, setSelectedModelId] = useState(() => selectedTaggerModel()?.id ?? TAGGER_MODELS[0].id);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const drag = useRef<{ id: number; x: number; y: number; panX: number; panY: number } | null>(null);
-    const model = selectedTaggerModel() ?? TAGGER_MODELS[0];
+    const nodeDrag = useRef<{ tag: string; id: number; x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
+    const suppressNodeClick = useRef(false);
+    const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>({});
+    const model = activeTaggerModel();
     const imageFiles = useMemo(() => scan.files.filter((file) => !file.hidden && file.kind === 'image'), [scan]);
 
     const prepareModel = async () => {
         if (loadingModel) return;
+        if (customModel && !validCustomTaggerModel(customModel)) {
+            toast('Enter a Hugging Face model ID like org/model or its Hugging Face URL');
+            return;
+        }
+        setCustomTaggerModel(customModel);
         setLoadingModel(true);
         setModelProgress(0);
         try {
@@ -131,7 +146,7 @@ export function TagManager() {
 
     useEffect(() => {
         void taggerModelDownloaded().then(setModelDownloaded);
-    }, []);
+    }, [customModel]);
 
     const { tags, edges, nodes } = useMemo(() => {
         const counts = new Map<string, number>();
@@ -160,22 +175,25 @@ export function TagManager() {
         return { tags: filtered, edges: graphEdges.filter((edge) => filtered.has(edge.a) && filtered.has(edge.b)), nodes: graphLayout(filtered, graphEdges) };
     }, [items, scan, query]);
 
-    const selectedNeighbors = selected ? neighborhood(selected, edges, depth) : new Set<string>();
-    const feedItems = useMemo(() => {
-        if (!selected) return [];
-        return scan.files.filter((file) => {
-            if (file.hidden || file.kind === 'file') return false;
-            return allTags(items[file.path]).some((tag) => selectedNeighbors.has(keyFor(tag)));
-        });
-    }, [items, scan, selected, selectedNeighbors]);
-
     const maxCount = Math.max(1, ...nodes.map((node) => node.count));
+    const selectedNeighbors = selected ? neighborhood(selected, edges, depth) : new Set<string>();
     const visibleEdges = edges.filter((edge) => !selected || selectedNeighbors.has(edge.a) && selectedNeighbors.has(edge.b));
+    const positionedNodes = nodes.map((node) => ({ ...node, ...(nodePositions[node.tag] ?? {}) }));
     const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+        if (nodeDrag.current) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
     };
     const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+        const currentNode = nodeDrag.current;
+        if (currentNode?.id === event.pointerId) {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const dx = (event.clientX - currentNode.x) * (WIDTH / rect.width) / zoom;
+            const dy = (event.clientY - currentNode.y) * (HEIGHT / rect.height) / zoom;
+            if (Math.abs(dx) + Math.abs(dy) > 3) currentNode.moved = true;
+            setNodePositions((positions) => ({ ...positions, [currentNode.tag]: { x: currentNode.startX + dx, y: currentNode.startY + dy } }));
+            return;
+        }
         if (!drag.current || drag.current.id !== event.pointerId) return;
         setPan({
             x: drag.current.panX + (event.clientX - drag.current.x) * (WIDTH / event.currentTarget.clientWidth),
@@ -183,6 +201,11 @@ export function TagManager() {
         });
     };
     const onPointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+        if (nodeDrag.current?.id === event.pointerId) {
+            suppressNodeClick.current = nodeDrag.current.moved;
+            nodeDrag.current = null;
+            return;
+        }
         if (drag.current?.id === event.pointerId) drag.current = null;
     };
     const onWheel = (event: React.WheelEvent<SVGSVGElement>) => {
@@ -199,7 +222,7 @@ export function TagManager() {
                 </div>
                 <input className="input !w-52" placeholder="Filter tags…" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
-            <div className="mx-4 mb-4 rounded-xl border border-line bg-white/[0.025] p-4">
+            <div className="order-last mx-4 mt-4 rounded-xl border border-line bg-white/[0.025] p-4">
                 <div className="flex flex-wrap items-start gap-3">
                     <div className="mr-auto">
                         <div className="flex items-center gap-2 text-sm font-semibold"><Icon name="sparkles" size={14} className="text-accent" /> Auto-tag images locally</div>
@@ -207,17 +230,50 @@ export function TagManager() {
                     </div>
                     <a className="text-xs text-accent hover:underline" href={model.url} target="_blank" rel="noreferrer">Hugging Face model ↗</a>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <label className="mt-3 block text-xs font-medium text-muted" htmlFor="custom-tagger-model">Custom model (optional)</label>
+                <input
+                    id="custom-tagger-model"
+                    className="input mt-1 !h-9 text-xs"
+                    placeholder="org/model or https://huggingface.co/org/model"
+                    value={customModel}
+                    disabled={running || loadingModel}
+                    onChange={(event) => {
+                        setCustomModel(event.target.value);
+                        setModelDownloaded(false);
+                    }}
+                    onBlur={() => setCustomTaggerModel(customModel)}
+                />
+                <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                    Use a Hugging Face Transformers.js-compatible <strong className="text-fg">zero-shot image classification</strong> model.
+                    It must provide the required config and browser ONNX files. CLIP-style models work; LLMs, text-only models,
+                    diffusion/checkpoint files, and arbitrary PyTorch or safetensors-only repositories do not.
+                </p>
+                <div className="mt-3 grid gap-2">
                     <div className="rounded-md border border-line bg-black/10 px-3 py-2 text-xs">
-                        <div className="font-medium">{model.label} · {model.size}</div>
-                        <div className="mt-0.5 text-muted">{model.license} · Transformers.js / zero-shot image classification</div>
+                        <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted" htmlFor="tagger-model">Model</label>
+                        <select
+                            id="tagger-model"
+                            className="input !h-9 w-full text-xs"
+                            value={selectedModelId}
+                            disabled={running || loadingModel}
+                            onChange={(event) => {
+                                setSelectedModelId(event.target.value);
+                                setSelectedTaggerModel(event.target.value);
+                                setModelDownloaded(false);
+                            }}
+                        >
+                            {TAGGER_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                        </select>
+                        <div className="mt-1 text-muted">{model.model} · {model.size} · {model.license}</div>
                     </div>
-                    <select className="input !h-9 !py-1 text-xs" aria-label="Maximum generated tags" value={maxTags} disabled={running} onChange={(e) => setMaxTags(Number(e.target.value))}>
-                        {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} tags</option>)}
-                    </select>
-                    <button className="btn btn-subtle h-9 justify-center text-xs" disabled={loadingModel || running} onClick={() => void prepareModel()}>
-                        <Icon name="download" size={13} /> {loadingModel ? `Downloading… ${Math.round(modelProgress)}%` : modelDownloaded ? 'Model downloaded' : 'Download model'}
-                    </button>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <select className="input !h-9 !py-1 text-xs" aria-label="Maximum generated tags" value={maxTags} disabled={running} onChange={(e) => setMaxTags(Number(e.target.value))}>
+                            {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} tags per image</option>)}
+                        </select>
+                        <button className="btn btn-subtle h-9 justify-center text-xs" disabled={loadingModel || running} onClick={() => void prepareModel()}>
+                            <Icon name="download" size={13} /> {loadingModel ? `Downloading… ${Math.round(modelProgress)}%` : modelDownloaded ? 'Model downloaded' : 'Download model'}
+                        </button>
+                    </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted">{imageFiles.length} images in this workspace{running && ` · ${done} / ${imageFiles.length}`}</span>
@@ -230,24 +286,51 @@ export function TagManager() {
                 </div>
             ) : (
                 <>
-                    <div className="relative mx-4 overflow-hidden rounded-xl border border-line bg-black/10">
-                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-[min(52vh,470px)] w-full min-h-[300px] cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
+                    <div className="order-first relative mx-4 h-[379px] min-h-[379px] min-w-[379px] w-[calc(100%-2rem)] flex-none overflow-hidden rounded-xl border border-line bg-bg">
+                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel} onClick={() => { store.patch({ tagGraphTag: null, tagGraphDepth: 0 }); }}>
                             <g transform={`translate(${pan.x} ${pan.y}) translate(${WIDTH / 2} ${HEIGHT / 2}) scale(${zoom}) translate(${-WIDTH / 2} ${-HEIGHT / 2})`}>
                             {visibleEdges.map((edge) => {
-                                const a = nodes.find((node) => node.tag === edge.a);
-                                const b = nodes.find((node) => node.tag === edge.b);
+                                const a = positionedNodes.find((node) => node.tag === edge.a);
+                                const b = positionedNodes.find((node) => node.tag === edge.b);
                                 if (!a || !b) return null;
-                                return <line key={`${edge.a}-${edge.b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="currentColor" className="text-line" strokeOpacity={selected ? 0.55 : 0.3} strokeWidth={Math.min(4, 0.8 + edge.weight * 0.35)} />;
+                                return <line key={`${edge.a}-${edge.b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#e6edf7" strokeOpacity={selected ? 0.9 : 0.72} strokeWidth={Math.min(5, 1.8 + edge.weight * 0.55)} />;
                             })}
-                            {nodes.map((node) => {
+                            {positionedNodes.map((node) => {
                                 const active = selected === node.tag;
                                 const nearby = !selected || selectedNeighbors.has(node.tag);
                                 const radius = 8 + (node.count / maxCount) * 14;
                                 return (
-                                    <g key={node.tag} className={`cursor-pointer transition-opacity ${nearby ? 'opacity-100' : 'opacity-20'}`} onClick={() => {                                     store.patch({ tagGraphTag: node.tag }); setDepth(0); track('tag_graph_node_selected'); }}>
+                                    <g
+                                        key={node.tag}
+                                        className={`cursor-grab transition-opacity active:cursor-grabbing ${nearby ? 'opacity-100' : 'opacity-20'}`}
+                                        onPointerDown={(event) => {
+                                            event.stopPropagation();
+                                            event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+                                            nodeDrag.current = { tag: node.tag, id: event.pointerId, x: event.clientX, y: event.clientY, startX: node.x, startY: node.y, moved: false };
+                                        }}
+                                        onPointerMove={(event) => {
+                                            event.stopPropagation();
+                                        }}
+                                        onPointerUp={(event) => {
+                                            event.stopPropagation();
+                                        }}
+                                        onPointerCancel={(event) => {
+                                            event.stopPropagation();
+                                            nodeDrag.current = null;
+                                        }}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            if (suppressNodeClick.current) {
+                                                suppressNodeClick.current = false;
+                                                return;
+                                            }
+                                            store.patch({ tagGraphTag: node.tag, tagGraphDepth: 0 });
+                                            track('tag_graph_node_selected');
+                                        }}
+                                    >
                                         <circle cx={node.x} cy={node.y} r={radius + (active ? 5 : 0)} fill={active ? 'currentColor' : 'transparent'} className={active ? 'text-accent' : ''} opacity={active ? 0.18 : 1} />
                                         <circle cx={node.x} cy={node.y} r={radius} fill="currentColor" className={active ? 'text-accent' : 'text-white/20'} />
-                                        <text x={node.x} y={node.y + radius + 16} textAnchor="middle" className={`fill-current text-[12px] ${active ? 'text-accent' : 'text-muted'}`}>{node.tag}</text>
+                                        <text x={node.x} y={node.y + radius + 16} textAnchor="middle" className={`fill-current text-[12px] font-medium ${active ? 'text-accent' : 'text-fg'}`}>{node.tag}</text>
                                     </g>
                                 );
                             })}
@@ -260,20 +343,11 @@ export function TagManager() {
                             <button className="rounded px-1.5 py-1 text-[10px] text-muted hover:bg-white/10 hover:text-fg" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <div className="order-2 flex flex-wrap items-center gap-3 px-4 py-3">
                         <div className="mr-auto text-sm">
-                            {selected ? <><span className="font-semibold">#{selected}</span><span className="ml-2 text-muted">{feedItems.length} images</span></> : <span className="text-muted">Select a tag to see its images</span>}
+                            {selected ? <span className="font-semibold">#{selected}</span> : <span className="text-muted">Select a tag to see its images in the center</span>}
                         </div>
-                        {selected && (
-                            <label className="flex items-center gap-2 text-xs text-muted">
-                                Include nearby tags
-                                <input type="range" min="0" max="3" step="1" value={depth} onChange={(e) => setDepth(Number(e.target.value))} />
-                                <span className="w-6 text-right text-foreground">{depth}</span>
-                            </label>
-                        )}
-                        {selected && <Btn ev="tag_graph_open_tag_clicked" variant="subtle" onClick={() => navigate({ kind: 'tag', tag: selected })}>Open tag</Btn>}
                     </div>
-                    {selected && <div className="min-h-[260px] flex-1"><Feed items={feedItems} emptyText="No images use this tag or its selected neighbors." /></div>}
                 </>
             )}
         </div>

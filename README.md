@@ -67,3 +67,13 @@ zero-shot image classifier prompted with art-reference concepts such as subject,
 mood, aesthetic, medium, and motifs. The UI shows the exact Hugging Face model,
 size, and license. Model weights are cached locally by Transformers.js and are
 reused on later runs; images and generated tags never leave the device.
+
+You can replace the built-in model with a custom one in Tag Graph. Enter either
+a Hugging Face ID such as `org/model` or its
+`https://huggingface.co/org/model` URL, then click **Download model**. Custom
+models must be Transformers.js-compatible zero-shot image classifiers with the
+required config and browser ONNX files; CLIP-style models are the safest
+choice. LLMs, text-only models, diffusion models, and repositories containing
+only arbitrary PyTorch or `.safetensors` checkpoints do not work with this
+image-tagging pipeline. Custom model weights are cached locally after the first
+successful download.

@@ -44,8 +44,10 @@ export const TAGGER_MODELS: TaggerModel[] = [
 ];
 
 const MODEL_KEY = 'hoard:tagger-model';
+const CUSTOM_MODEL_KEY = 'hoard:tagger-custom-model';
 const READY_KEY = 'hoard:tagger-ready';
 let selectedId = TAGGER_MODELS[0].id;
+let customModelValue = '';
 let loadedId: string | null = null;
 let classifier: ((input: Blob) => Promise<Array<{ label: string; score: number }>>) | null = null;
 type Classifier = (input: Blob) => Promise<Array<{ label: string; score: number }>>;
@@ -54,6 +56,9 @@ const loadingModels = new Map<string, Promise<Classifier>>();
 
 void idbGet<string>('kv', MODEL_KEY).then((value) => {
     if (value && TAGGER_MODELS.some((model) => model.id === value)) selectedId = value;
+});
+void idbGet<string>('kv', CUSTOM_MODEL_KEY).then((value) => {
+    if (value) customModelValue = value;
 });
 
 export function selectedTaggerModel(): TaggerModel | null {
@@ -67,9 +72,44 @@ export function setSelectedTaggerModel(id: string): void {
     activateCachedModel(selectedTaggerModel()?.model ?? '');
 }
 
+export function customTaggerModel(): string {
+    return customModelValue;
+}
+
+export function setCustomTaggerModel(value: string): void {
+    customModelValue = value.trim();
+    void idbSet('kv', CUSTOM_MODEL_KEY, customModelValue);
+    activateCachedModel(modelSource(activeTaggerModel().model));
+}
+
+export function activeTaggerModel(): TaggerModel {
+    const builtin = selectedTaggerModel() ?? TAGGER_MODELS[0];
+    if (!customModelValue) return builtin;
+    return {
+        ...builtin,
+        id: `custom:${customModelValue}`,
+        label: customModelValue,
+        model: customModelValue,
+        url: customModelValue.startsWith('https://huggingface.co/') ? customModelValue : `https://huggingface.co/${customModelValue}`,
+        size: 'size determined by model files',
+    };
+}
+
+export function validCustomTaggerModel(value: string): boolean {
+    const model = value.trim();
+    return /^[\w.-]+\/[\w.-]+$/.test(model) || /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+(?:\/tree\/main)?\/?$/.test(model);
+}
+
+function modelSource(value: string): string {
+    const model = value.trim();
+    if (!model.startsWith('https://huggingface.co/')) return model;
+    return model.replace(/^https:\/\/huggingface\.co\//, '').replace(/\/tree\/main\/?$/, '').replace(/\/$/, '');
+}
+
 export async function loadTaggerModel(onProgress?: (value: number) => void): Promise<void> {
-    const model = selectedTaggerModel() ?? TAGGER_MODELS[0];
-    const modelId = model.model;
+    const model = activeTaggerModel();
+    const modelId = modelSource(model.model);
+    if (customModelValue && !validCustomTaggerModel(customModelValue)) throw new Error('Use a Hugging Face model ID such as org/model or its https://huggingface.co/org/model URL');
     if (loadedId === modelId && classifier) return;
     const cached = classifierCache.get(modelId);
     if (cached) {
@@ -103,7 +143,7 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
 }
 
 export async function taggerModelDownloaded(): Promise<boolean> {
-    return (await idbGet<string>('kv', READY_KEY)) === (selectedTaggerModel()?.model ?? '');
+    return (await idbGet<string>('kv', READY_KEY)) === modelSource(activeTaggerModel().model);
 }
 
 function activateModel(modelId: string, modelClassifier: Classifier): void {
