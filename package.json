@@ -29,8 +29,9 @@
         "protobufjs": true
     },
     "dependencies": {
-        "@tauri-apps/api": "^2.8.0",
         "@huggingface/transformers": "^3.7.2",
+        "@series-inc/rundot-game-sdk": "5.29.1",
+        "@tauri-apps/api": "^2.8.0",
         "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
         "react": "19.2.4",
         "react-dom": "19.2.4"
