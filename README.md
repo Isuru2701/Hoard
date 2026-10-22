@@ -6,21 +6,21 @@ Small, fast, local.
 
 - **Workspaces** linked to a real folder on your computer
 
-![workspace selection](references\dashboard.png)
+![workspace selection](references/dashboard.png)
 
 - **Folders** are real folders; click one to see its images in a masonry feed.
 
-![folder feed](references\folderfeed.png)
+![folder feed](references/folderfeed.png)
 
 - **Canvases** (`*.hoard-canvas`) are infinite boards: drag/drop/paste images, sticky notes, text, shapes, arrows, freehand sketches, crop, flip, colour adjustments, undo/redo, copy/paste, layering, PNG export. Images placed on a canvas are copied into its `<name>.hoard-assets` folder.
 
-![canvas feed](references\canvas.png)
+![canvas feed](references/canvas.png)
 
 - **Tagging**
  manual tags, auto tags, source link, creator, notes, rating, favourite.
  search along a graph to find inspiration that matches what you're looking for, semantically.
 
-![tag search](references\tagsearch.png)
+![tag search](references/tagsearch.png)
 
 Intended Users: Artists, Character designers, Game devs, UI developers, and more.
 
