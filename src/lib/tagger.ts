@@ -1,7 +1,7 @@
 import type { MediaRef } from './thumbs.ts';
 import { getFile, type Dir } from './fs.ts';
 import type { ProgressInfo } from '@huggingface/transformers';
-import { idbDelete, idbGet, idbSet } from './idb.ts';
+import { idbGet, idbSet } from './idb.ts';
 
 export interface TaggerModel {
     id: string;
@@ -13,7 +13,7 @@ export interface TaggerModel {
     license: string;
     url: string;
     dtype: 'fp32' | 'q8';
-    task: 'zero-shot-image-classification';
+    task: 'zero-shot-image-classification' | 'wd-tagger';
     candidates: string[];
 }
 
@@ -41,13 +41,24 @@ export const TAGGER_MODELS: TaggerModel[] = [
             'flowers', 'foliage', 'weapons', 'armor', 'machinery', 'buildings', 'windows', 'textile pattern',
         ],
     },
+    {
+        id: 'wd-vit-tagger-v3',
+        label: 'WD ViT Tagger v3',
+        size: '~379 MB',
+        description: 'A local anime and illustration tagger trained on Danbooru labels.',
+        model: 'SmilingWolf/wd-vit-tagger-v3',
+        kind: 'art-tags',
+        license: 'MIT',
+        url: 'https://huggingface.co/SmilingWolf/wd-vit-tagger-v3',
+        dtype: 'fp32',
+        task: 'wd-tagger',
+        candidates: [],
+    },
 ];
 
 const MODEL_KEY = 'hoard:tagger-model';
-const CUSTOM_MODEL_KEY = 'hoard:tagger-custom-model';
 const READY_KEY = 'hoard:tagger-ready';
 let selectedId = TAGGER_MODELS[0].id;
-let customModelValue = '';
 let loadedId: string | null = null;
 let classifier: ((input: Blob) => Promise<Array<{ label: string; score: number }>>) | null = null;
 type Classifier = (input: Blob) => Promise<Array<{ label: string; score: number }>>;
@@ -57,10 +68,6 @@ const loadingModels = new Map<string, Promise<Classifier>>();
 void idbGet<string>('kv', MODEL_KEY).then((value) => {
     if (value && TAGGER_MODELS.some((model) => model.id === value)) selectedId = value;
 });
-void idbGet<string>('kv', CUSTOM_MODEL_KEY).then((value) => {
-    if (value) customModelValue = value;
-});
-
 export function selectedTaggerModel(): TaggerModel | null {
     return TAGGER_MODELS.find((model) => model.id === selectedId) ?? TAGGER_MODELS[0];
 }
@@ -72,39 +79,8 @@ export function setSelectedTaggerModel(id: string): void {
     activateCachedModel(selectedTaggerModel()?.model ?? '');
 }
 
-export function customTaggerModel(): string {
-    return customModelValue;
-}
-
-export function setCustomTaggerModel(value: string): void {
-    customModelValue = value.trim();
-    void idbSet('kv', CUSTOM_MODEL_KEY, customModelValue);
-    activateCachedModel(modelSource(activeTaggerModel().model));
-}
-
-export function deleteCustomTaggerModel(): void {
-    customModelValue = '';
-    void idbDelete('kv', CUSTOM_MODEL_KEY);
-    void idbDelete('kv', READY_KEY);
-    activateCachedModel(selectedTaggerModel()?.model ?? '');
-}
-
 export function activeTaggerModel(): TaggerModel {
-    const builtin = selectedTaggerModel() ?? TAGGER_MODELS[0];
-    if (!customModelValue) return builtin;
-    return {
-        ...builtin,
-        id: `custom:${customModelValue}`,
-        label: customModelValue,
-        model: customModelValue,
-        url: customModelValue.startsWith('https://huggingface.co/') ? customModelValue : `https://huggingface.co/${customModelValue}`,
-        size: 'size determined by model files',
-    };
-}
-
-export function validCustomTaggerModel(value: string): boolean {
-    const model = value.trim();
-    return /^[\w.-]+\/[\w.-]+$/.test(model) || /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+(?:\/tree\/main)?\/?$/.test(model);
+    return selectedTaggerModel() ?? TAGGER_MODELS[0];
 }
 
 function modelSource(value: string): string {
@@ -116,7 +92,6 @@ function modelSource(value: string): string {
 export async function loadTaggerModel(onProgress?: (value: number) => void): Promise<void> {
     const model = activeTaggerModel();
     const modelId = modelSource(model.model);
-    if (customModelValue && !validCustomTaggerModel(customModelValue)) throw new Error('Use a Hugging Face model ID such as org/model or its https://huggingface.co/org/model URL');
     if (loadedId === modelId && classifier) return;
     const cached = classifierCache.get(modelId);
     if (cached) {
@@ -126,6 +101,7 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
     let loading = loadingModels.get(modelId);
     if (!loading) {
         loading = (async () => {
+            if (model.task === 'wd-tagger') return loadWdTagger(model, onProgress);
             const { pipeline } = await import('@huggingface/transformers');
             const pipe = await pipeline(model.task, modelId, {
                 dtype: model.dtype,
@@ -143,6 +119,43 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
             () => loadingModels.delete(modelId),
             () => loadingModels.delete(modelId)
         );
+    }
+
+    async function loadWdTagger(model: TaggerModel, onProgress?: (value: number) => void): Promise<Classifier> {
+        const { RawImage } = await import('@huggingface/transformers');
+        const { InferenceSession, Tensor } = await import('onnxruntime-web');
+        const base = `https://huggingface.co/${model.model}/resolve/main/`;
+        onProgress?.(0);
+        const [modelResponse, tagsResponse] = await Promise.all([fetch(`${base}model.onnx`), fetch(`${base}selected_tags.csv`)]);
+        if (!modelResponse.ok || !tagsResponse.ok) throw new Error('WD ViT Tagger files could not be downloaded');
+        const [modelBuffer, tagsCsv] = await Promise.all([modelResponse.arrayBuffer(), tagsResponse.text()]);
+        const labels = tagsCsv.trim().split(/\r?\n/).slice(1).map((line) => {
+            const [, name, category] = line.split(',');
+            return { name: name.replace(/^"|"$/g, ''), category: Number(category) };
+        });
+        const session = await InferenceSession.create(new Uint8Array(modelBuffer));
+        onProgress?.(100);
+        return async (input) => {
+            const image = await RawImage.fromBlob(input);
+            const resized = await image.rgb().resize(448, 448, { resample: 3 });
+            const pixels = new Float32Array(3 * 448 * 448);
+            for (let y = 0; y < 448; y++) {
+                for (let x = 0; x < 448; x++) {
+                    const source = (y * 448 + x) * 3;
+                    pixels[y * 448 + x] = (resized.data[source] / 255 - 0.5) / 0.5;
+                    pixels[448 * 448 + y * 448 + x] = (resized.data[source + 1] / 255 - 0.5) / 0.5;
+                    pixels[2 * 448 * 448 + y * 448 + x] = (resized.data[source + 2] / 255 - 0.5) / 0.5;
+                }
+            }
+            const inputName = session.inputNames[0];
+            const output = await session.run({ [inputName]: new Tensor('float32', pixels, [1, 3, 448, 448]) });
+            const scores = output[session.outputNames[0]].data as Float32Array;
+            return labels
+                .map((label, index) => ({ label: label.name, score: 1 / (1 + Math.exp(-scores[index])), category: label.category }))
+                .filter((prediction) => prediction.category === 0)
+                .sort((a, b) => b.score - a.score)
+                .map(({ label, score }) => ({ label, score }));
+        };
     }
     classifier = await loading;
     loadedId = modelId;

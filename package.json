@@ -34,6 +34,7 @@
     "dependencies": {
         "@tauri-apps/api": "^2.8.0",
         "@huggingface/transformers": "^3.7.2",
+        "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
         "@series-inc/rundot-game-sdk": "5.29.1",
         "pixi.js": "8.19.0",
         "react": "19.2.4",

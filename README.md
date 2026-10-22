@@ -61,19 +61,11 @@ images in the workspace. The same model can tag one selected image from the
 folder feed or canvas through the right sidebar. Generated suggestions are
 stored separately from manual tags.
 
-The included model is [Xenova/clip-vit-base-patch32](https://huggingface.co/Xenova/clip-vit-base-patch32),
-approximately 354 MB in its quantized Transformers.js variant. It is a
-zero-shot image classifier prompted with art-reference concepts such as subject,
-mood, aesthetic, medium, and motifs. The UI shows the exact Hugging Face model,
-size, and license. Model weights are cached locally by Transformers.js and are
-reused on later runs; images and generated tags never leave the device.
-
-You can replace the built-in model with a custom one in Tag Graph. Enter either
-a Hugging Face ID such as `org/model` or its
-`https://huggingface.co/org/model` URL, then click **Download model**. Custom
-models must be Transformers.js-compatible zero-shot image classifiers with the
-required config and browser ONNX files; CLIP-style models are the safest
-choice. LLMs, text-only models, diffusion models, and repositories containing
-only arbitrary PyTorch or `.safetensors` checkpoints do not work with this
-image-tagging pipeline. Custom model weights are cached locally after the first
-successful download.
+The included models are [Xenova/clip-vit-base-patch32](https://huggingface.co/Xenova/clip-vit-base-patch32),
+approximately 354 MB in its quantized Transformers.js variant, and
+[SmilingWolf/wd-vit-tagger-v3](https://huggingface.co/SmilingWolf/wd-vit-tagger-v3),
+approximately 379 MB. CLIP is a zero-shot image classifier prompted with
+art-reference concepts such as subject, mood, aesthetic, medium, and motifs.
+WD ViT Tagger is a Danbooru-trained illustration tagger with its own ONNX
+inference path and general-tag vocabulary. Both models are downloaded on
+demand, cached locally, and run without uploading images.

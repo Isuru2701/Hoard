@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
 import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
-import { activeTaggerModel, customTaggerModel, deleteCustomTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded, validCustomTaggerModel } from '../../lib/tagger.ts';
+import { activeTaggerModel, loadTaggerModel, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
@@ -85,7 +85,6 @@ export function TagManager() {
     const [loadingModel, setLoadingModel] = useState(false);
     const [modelProgress, setModelProgress] = useState(0);
     const [modelDownloaded, setModelDownloaded] = useState(false);
-    const [customModel, setCustomModel] = useState(() => customTaggerModel());
     const [selectedModelId, setSelectedModelId] = useState(() => selectedTaggerModel()?.id ?? TAGGER_MODELS[0].id);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -98,11 +97,6 @@ export function TagManager() {
 
     const prepareModel = async () => {
         if (loadingModel) return;
-        if (customModel && !validCustomTaggerModel(customModel)) {
-            toast('Enter a Hugging Face model ID like org/model or its Hugging Face URL');
-            return;
-        }
-        setCustomTaggerModel(customModel);
         setLoadingModel(true);
         setModelProgress(0);
         try {
@@ -149,7 +143,7 @@ export function TagManager() {
 
     useEffect(() => {
         void taggerModelDownloaded().then(setModelDownloaded);
-    }, [customModel]);
+    }, [selectedModelId]);
 
     const { tags, edges, nodes } = useMemo(() => {
         const counts = new Map<string, number>();
@@ -234,58 +228,26 @@ export function TagManager() {
                 <div className="flex flex-wrap items-start gap-3">
                     <div className="mr-auto">
                         <div className="flex items-center gap-2 text-sm font-semibold"><Icon name="sparkles" size={14} className="text-accent" /> Auto-tag images locally</div>
-                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">Uses <strong className="text-fg">Xenova/clip-vit-base-patch32</strong> from Hugging Face, downloaded once and cached on this device. Nothing is uploaded.</p>
+                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">Uses a local vision model downloaded once and cached on this device. Nothing is uploaded.</p>
                     </div>
                     <a className="text-xs text-accent hover:underline" href={model.url} target="_blank" rel="noreferrer">Hugging Face model ↗</a>
                 </div>
-                <label className="mt-3 block text-xs font-medium text-muted" htmlFor="custom-tagger-model">Custom model (optional)</label>
-                <input
-                    id="custom-tagger-model"
-                    className="input mt-1 !h-9 text-xs"
-                    placeholder="org/model or https://huggingface.co/org/model"
-                    value={customModel}
-                    disabled={running || loadingModel}
-                    onChange={(event) => {
-                        setCustomModel(event.target.value);
-                        setModelDownloaded(false);
-                    }}
-                    onBlur={() => setCustomTaggerModel(customModel)}
-                />
-                <p className="mt-1 text-[10px] leading-relaxed text-muted">
-                    Use a Hugging Face Transformers.js-compatible <strong className="text-fg">zero-shot image classification</strong> model.
-                    It must provide the required config and browser ONNX files. CLIP-style models work; LLMs, text-only models,
-                    diffusion/checkpoint files, and arbitrary PyTorch or safetensors-only repositories do not.
-                </p>
                 <div className="mt-3 grid gap-2">
                     <div className="rounded-md border border-line bg-black/10 px-3 py-2 text-xs">
                         <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted" htmlFor="tagger-model">Model</label>
                         <select
                             id="tagger-model"
                             className="input !h-9 w-full text-xs"
-                            value={customModel.trim() ? `custom:${customModel.trim()}` : selectedModelId}
+                            value={selectedModelId}
                             disabled={running || loadingModel}
                             onChange={(event) => {
                                 const value = event.target.value;
-                                if (value.startsWith('custom:')) {
-                                    const custom = value.slice('custom:'.length);
-                                    setCustomModel(custom);
-                                    setCustomTaggerModel(custom);
-                                } else {
-                                    setSelectedModelId(value);
-                                    setSelectedTaggerModel(value);
-                                    setCustomModel('');
-                                    setCustomTaggerModel('');
-                                }
-                                if (value === '__delete_custom__') {
-                                    deleteCustomTaggerModel();
-                                    setCustomModel('');
-                                }
+                                setSelectedModelId(value);
+                                setSelectedTaggerModel(value);
                                 setModelDownloaded(false);
                             }}
                         >
                             {TAGGER_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                            {customModel.trim() && <option value={`custom:${customModel.trim()}`}>Custom · {customModel.trim()}</option>}
-                            {customModel.trim() && <option value="__delete_custom__">Delete custom model</option>}
                         </select>
                         <div className="mt-1 text-muted">{model.model} · {model.size} · {model.license}</div>
                     </div>
