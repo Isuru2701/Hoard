@@ -1,13 +1,56 @@
 # hoard — reference collection boards
 
-A web app for collecting, organising, tagging and arranging reference images and videos.
+A tauri app for collecting, organising, tagging and arranging reference images and videos.
 
-- **Workspaces** linked to a real folder on your computer (Chrome/Edge desktop) or stored inside the browser.
+Small, fast, local.
+
+- **Workspaces** linked to a real folder on your computer
+
+![workspace selection](references\dashboard.png)
+
 - **Folders** are real folders; click one to see its images in a masonry feed.
-- **Canvases** (`*.hoard-canvas`) are infinite boards: drag/drop/paste images, sticky notes, text, shapes, arrows, freehand sketches, crop, flip, colour adjustments, undo/redo, copy/paste, layering, PNG export. Images placed on a canvas are copied into its `<name>.hoard-assets` folder.
-- **Metadata** (tags, auto tags, source link, creator, notes, rating, favourite, colour label) lives in `.hoard/meta.json`; deleted items go to `.hoard/trash`.
 
-## Run locally
+![folder feed](references\folderfeed.png)
+
+- **Canvases** (`*.hoard-canvas`) are infinite boards: drag/drop/paste images, sticky notes, text, shapes, arrows, freehand sketches, crop, flip, colour adjustments, undo/redo, copy/paste, layering, PNG export. Images placed on a canvas are copied into its `<name>.hoard-assets` folder.
+
+![canvas feed](references\canvas.png)
+
+- **Tagging**
+ manual tags, auto tags, source link, creator, notes, rating, favourite.
+ search along a graph to find inspiration that matches what you're looking for, semantically.
+
+![tag search](references\tagsearch.png)
+
+Intended Users: Artists, Character designers, Game devs, UI developers, and more.
+
+## Current Features
+- [ ] separate your references into profiles and workspaces
+- [ ] fully open-source: no credit cards, accounts, or telemetry here
+- [ ] view your images and videos like you would on pinterest.
+- [ ] bring your files into a canvas, where you can arrange, draw and brainstorm your designs.
+- [ ] automatic image tagging using open-source locally run AI models.
+- [ ] use semantic proximity to find content that is related to a tag.
+- [ ] export your canvas as a png.
+
+
+note: You can add your own models from HuggingFace, but this is very experimental. Use at your own risk.
+
+
+## Roadmap
+- [ ] overlay canvases over other apps
+- [ ] better keyboard shortcuts for canvas
+- [ ] embed youtube, twitter, etc
+- [ ] plugin support
+
+If you have suggestions, make a pull request!
+
+
+# Releases
+- 
+
+---
+# Run locally
 
 ```
 npm install
