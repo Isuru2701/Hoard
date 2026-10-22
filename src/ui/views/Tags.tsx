@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
 import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
-import { activeTaggerModel, customTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded, validCustomTaggerModel } from '../../lib/tagger.ts';
+import { activeTaggerModel, customTaggerModel, deleteCustomTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, tagWithModel, taggerModelDownloaded, validCustomTaggerModel } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
@@ -112,7 +112,10 @@ export function TagManager() {
         } catch (error) {
             console.warn('[autotag] model download failed', error);
             const reason = error instanceof Error ? error.message : String(error);
-            toast(`Model failed: ${reason.slice(0, 140)}`);
+            const accessHint = /401|403|unauthorized|forbidden/i.test(reason)
+                ? 'The Hugging Face repository is private, gated, or missing public file access.'
+                : reason.slice(0, 140);
+            toast(`Model failed: ${accessHint}`);
         } finally {
             setLoadingModel(false);
         }
@@ -202,7 +205,12 @@ export function TagManager() {
     };
     const onPointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
         if (nodeDrag.current?.id === event.pointerId) {
-            suppressNodeClick.current = nodeDrag.current.moved;
+            const currentNode = nodeDrag.current;
+            if (!currentNode.moved) {
+                store.patch({ tagGraphTag: currentNode.tag, tagGraphDepth: 0 });
+                track('tag_graph_node_selected');
+            }
+            suppressNodeClick.current = true;
             nodeDrag.current = null;
             return;
         }
@@ -218,7 +226,7 @@ export function TagManager() {
             <div className="flex flex-wrap items-center gap-3 px-4 pb-2 pt-4">
                 <div className="mr-auto">
                     <div className="text-xl font-bold">Tag graph</div>
-                    <div className="text-xs text-muted">Semantic closeness from tags used on the same images</div>
+                    <div className="text-xs text-muted">Similarity based on tags</div>
                 </div>
                 <input className="input !w-52" placeholder="Filter tags…" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
@@ -254,15 +262,30 @@ export function TagManager() {
                         <select
                             id="tagger-model"
                             className="input !h-9 w-full text-xs"
-                            value={selectedModelId}
+                            value={customModel.trim() ? `custom:${customModel.trim()}` : selectedModelId}
                             disabled={running || loadingModel}
                             onChange={(event) => {
-                                setSelectedModelId(event.target.value);
-                                setSelectedTaggerModel(event.target.value);
+                                const value = event.target.value;
+                                if (value.startsWith('custom:')) {
+                                    const custom = value.slice('custom:'.length);
+                                    setCustomModel(custom);
+                                    setCustomTaggerModel(custom);
+                                } else {
+                                    setSelectedModelId(value);
+                                    setSelectedTaggerModel(value);
+                                    setCustomModel('');
+                                    setCustomTaggerModel('');
+                                }
+                                if (value === '__delete_custom__') {
+                                    deleteCustomTaggerModel();
+                                    setCustomModel('');
+                                }
                                 setModelDownloaded(false);
                             }}
                         >
                             {TAGGER_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                            {customModel.trim() && <option value={`custom:${customModel.trim()}`}>Custom · {customModel.trim()}</option>}
+                            {customModel.trim() && <option value="__delete_custom__">Delete custom model</option>}
                         </select>
                         <div className="mt-1 text-muted">{model.model} · {model.size} · {model.license}</div>
                     </div>
@@ -287,7 +310,13 @@ export function TagManager() {
             ) : (
                 <>
                     <div className="order-first relative mx-4 h-[379px] min-h-[379px] min-w-[379px] w-[calc(100%-2rem)] flex-none overflow-hidden rounded-xl border border-line bg-bg">
-                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel} onClick={() => { store.patch({ tagGraphTag: null, tagGraphDepth: 0 }); }}>
+                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel} onClick={() => {
+                            if (suppressNodeClick.current) {
+                                suppressNodeClick.current = false;
+                                return;
+                            }
+                            store.patch({ tagGraphTag: null, tagGraphDepth: 0 });
+                        }}>
                             <g transform={`translate(${pan.x} ${pan.y}) translate(${WIDTH / 2} ${HEIGHT / 2}) scale(${zoom}) translate(${-WIDTH / 2} ${-HEIGHT / 2})`}>
                             {visibleEdges.map((edge) => {
                                 const a = positionedNodes.find((node) => node.tag === edge.a);
@@ -317,15 +346,6 @@ export function TagManager() {
                                         onPointerCancel={(event) => {
                                             event.stopPropagation();
                                             nodeDrag.current = null;
-                                        }}
-                                        onClick={(event) => {
-                                            event.stopPropagation();
-                                            if (suppressNodeClick.current) {
-                                                suppressNodeClick.current = false;
-                                                return;
-                                            }
-                                            store.patch({ tagGraphTag: node.tag, tagGraphDepth: 0 });
-                                            track('tag_graph_node_selected');
                                         }}
                                     >
                                         <circle cx={node.x} cy={node.y} r={radius + (active ? 5 : 0)} fill={active ? 'currentColor' : 'transparent'} className={active ? 'text-accent' : ''} opacity={active ? 0.18 : 1} />

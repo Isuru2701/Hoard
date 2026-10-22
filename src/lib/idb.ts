@@ -63,5 +63,15 @@ export async function idbSet(store: StoreName, key: string, value: unknown): Pro
     }
 }
 
+export async function idbDelete(store: StoreName, key: string): Promise<void> {
+    memory.delete(store + ':' + key);
+    if (disabled) return;
+    try {
+        await run<undefined>(store, 'readwrite', (s) => s.delete(key));
+    } catch {
+        /* memory copy is already deleted */
+    }
+}
+
 /** True when real browser storage is unavailable (data lasts for this session only). */
 export const storageBlocked = () => disabled;

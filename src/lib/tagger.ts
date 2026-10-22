@@ -1,7 +1,7 @@
 import type { MediaRef } from './thumbs.ts';
 import { getFile, type Dir } from './fs.ts';
 import type { ProgressInfo } from '@huggingface/transformers';
-import { idbGet, idbSet } from './idb.ts';
+import { idbDelete, idbGet, idbSet } from './idb.ts';
 
 export interface TaggerModel {
     id: string;
@@ -80,6 +80,13 @@ export function setCustomTaggerModel(value: string): void {
     customModelValue = value.trim();
     void idbSet('kv', CUSTOM_MODEL_KEY, customModelValue);
     activateCachedModel(modelSource(activeTaggerModel().model));
+}
+
+export function deleteCustomTaggerModel(): void {
+    customModelValue = '';
+    void idbDelete('kv', CUSTOM_MODEL_KEY);
+    void idbDelete('kv', READY_KEY);
+    activateCachedModel(selectedTaggerModel()?.model ?? '');
 }
 
 export function activeTaggerModel(): TaggerModel {
