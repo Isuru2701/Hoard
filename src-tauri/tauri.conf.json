@@ -31,6 +31,9 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
-    }
+    },
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
