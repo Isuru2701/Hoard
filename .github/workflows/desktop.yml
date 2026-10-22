@@ -2,16 +2,6 @@ name: Build Windows desktop app
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
-      - master
 
 permissions:
   contents: read
@@ -25,6 +15,12 @@ jobs:
       RUST_BACKTRACE: '1'
 
     steps:
+      - name: Check authorization
+        if: github.actor != 'Isuru2701'
+        run: |
+          echo "::error::Unauthorized: Only the repository owner can trigger this workflow."
+          exit 1
+
       - name: Check out source
         uses: actions/checkout@v4
 
@@ -75,4 +71,3 @@ jobs:
           name: hoard-windows-executable
           if-no-files-found: error
           path: src-tauri/target/release/hoard.exe
-
