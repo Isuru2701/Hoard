@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../state/store.ts';
 import { createWorkspace, deleteProfileAction, menuAt, openWorkspace, removeWorkspace, saveProfileAction, selectProfile, toast } from '../state/actions.ts';
-import { WS_COLORS, canPickFolder, type Profile, type WorkspaceRecord } from '../lib/workspaces.ts';
+import { WS_COLORS, type Profile, type WorkspaceRecord } from '../lib/workspaces.ts';
 import { Btn, IconBtn, SectionLabel } from './kit.tsx';
 import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
@@ -27,10 +27,10 @@ function ProfileForm({ initial, createNew = false, onDone }: { initial: Profile 
 }
 
 function NewWorkspaceModal({ onClose }: { onClose: () => void }) {
-    const pickable = canPickFolder();
+    const desktop = isTauri();
     const [name, setName] = useState('');
     const [color, setColor] = useState(WS_COLORS[0]);
-    const [kind, setKind] = useState<'local' | 'browser'>(pickable ? 'local' : 'browser');
+    const [kind, setKind] = useState<'local' | 'browser'>(desktop ? 'local' : 'browser');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const submit = async () => {
@@ -71,13 +71,11 @@ function NewWorkspaceModal({ onClose }: { onClose: () => void }) {
                     ))}
                 </div>
                 <div className="mt-4 space-y-2">
-                    <Option
-                        k="local"
-                        title="A folder on my computer"
-                        desc={pickable ? 'Folders you create here are real folders on disk. You pick the folder next.' : 'Needs Chrome or Edge on a computer.'}
-                        disabled={!pickable}
-                    />
-                    <Option k="browser" title="Inside this browser" desc="Works everywhere. Files stay on this device, inside the browser." />
+                    {desktop ? (
+                        <Option k="local" title="A folder on my computer" desc="Folders you create here are real folders on disk. You pick the folder next." />
+                    ) : (
+                        <Option k="browser" title="Workspace" desc="Files stay on this device, inside the browser." />
+                    )}
                 </div>
                 {error && <div className="mt-3 rounded-lg bg-red-500/10 p-3 text-xs leading-relaxed text-red-300">{error}</div>}
                 <div className="mt-5 flex justify-end gap-2">

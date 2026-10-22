@@ -23,7 +23,7 @@ export const TAGGER_MODELS: TaggerModel[] = [
         id: 'clip-vit-base-patch32',
         label: 'CLIP ViT-B/32',
         size: '~354 MB quantized',
-        description: 'A local zero-shot vision model for art references: subjects, mood, aesthetic, medium, and motifs.',
+        description: 'CLIP compares the image with the phrases in your vocabulary and ranks the ones that seem to fit. It is flexible and good for broad ideas like casual wear, monochrome, or gothic fashion, but it can only suggest phrases you provide.',
         model: 'Xenova/clip-vit-base-patch32',
         kind: 'semantic',
         license: 'Apache-2.0',
@@ -31,13 +31,18 @@ export const TAGGER_MODELS: TaggerModel[] = [
         dtype: 'q8',
         task: 'zero-shot-image-classification',
         candidates: [
-            'character design', 'creature design', 'environment design', 'costume design', 'portrait', 'figure',
-            'animal', 'architecture', 'interior', 'landscape', 'still life', 'prop design', 'vehicle',
-            'digital painting', 'concept art', 'illustration', 'anime', 'comic art', 'watercolor', 'oil painting',
+            'casual wear', 'streetwear', 'formal wear', 'evening wear', 'sportswear', 'workwear', 'loungewear',
+            'gothic fashion', 'punk fashion', 'grunge fashion', 'bohemian fashion', 'vintage fashion',
+            'romantic fashion', 'minimalist fashion', 'avant-garde fashion', 'preppy fashion', 'military fashion',
+            'historical fashion', 'fantasy fashion', 'futuristic fashion', 'traditional clothing',
+            'layered clothing', 'oversized clothing', 'tailored clothing', 'flowing clothing', 'ornate clothing',
+            'leather clothing', 'denim clothing', 'knitwear', 'lace', 'floral print', 'geometric print',
+            'monochrome', 'muted colors', 'pastel colors', 'vibrant colors', 'dark colors', 'warm colors',
+            'cool colors', 'minimalist', 'maximalist', 'surreal', 'ornate', 'organic', 'textured',
+            'digital painting', 'concept art', 'illustration', 'comic art', 'watercolor', 'oil painting',
             'pencil sketch', 'line art', 'ink drawing', 'collage', '3d render', 'photograph', 'pixel art',
-            'abstract', 'minimalist', 'maximalist', 'surreal', 'geometric', 'ornate', 'organic', 'textured',
-            'warm', 'cool', 'muted', 'pastel', 'vibrant', 'monochrome', 'dark', 'bright', 'calm', 'dreamy',
-            'eerie', 'dramatic', 'playful', 'melancholic', 'romantic', 'futuristic', 'vintage', 'whimsical',
+            'portrait', 'figure', 'animal', 'architecture', 'interior', 'landscape', 'still life', 'vehicle',
+            'calm', 'dreamy', 'eerie', 'dramatic', 'playful', 'melancholic', 'romantic', 'whimsical',
             'floral motif', 'geometric motif', 'clouds', 'water', 'mountains', 'forest', 'stars', 'fire',
             'flowers', 'foliage', 'weapons', 'armor', 'machinery', 'buildings', 'windows', 'textile pattern',
         ],
@@ -46,7 +51,7 @@ export const TAGGER_MODELS: TaggerModel[] = [
         id: 'wd-vit-tagger-v3',
         label: 'WD ViT Tagger v3',
         size: '~379 MB',
-        description: 'A local anime and illustration tagger trained on Danbooru labels.',
+        description: 'WD ViT looks at the image and picks from a large built-in list of illustration tags. It is more detailed and literal than CLIP, especially for anime-style artwork, but you cannot edit its tag list here.',
         model: 'SmilingWolf/wd-vit-tagger-v3',
         kind: 'art-tags',
         license: 'MIT',
@@ -60,9 +65,11 @@ export const TAGGER_MODELS: TaggerModel[] = [
 const MODEL_KEY = 'hoard:tagger-model';
 const READY_KEY = 'hoard:tagger-ready';
 const CUSTOM_MODELS_KEY = 'hoard:tagger-custom-models';
+const CANDIDATES_KEY = 'hoard:tagger-candidates';
 const CUSTOM_ASSET_PREFIX = 'hoard:tagger-asset:';
 let selectedId = TAGGER_MODELS[0].id;
 let customModels: TaggerModel[] = [];
+let candidateOverrides: Record<string, string[]> = {};
 let loadedId: string | null = null;
 let classifier: ((input: Blob) => Promise<Array<{ label: string; score: number }>>) | null = null;
 type Classifier = (input: Blob) => Promise<Array<{ label: string; score: number }>>;
@@ -76,12 +83,19 @@ void idbGet<string>('kv', MODEL_KEY).then((value) => {
 void idbGet<TaggerModel[]>('kv', CUSTOM_MODELS_KEY).then((value) => {
     if (value) customModels = value?.filter((model) => model.custom) ?? [];
 });
+void idbGet<Record<string, string[]>>('kv', CANDIDATES_KEY).then((value) => {
+    candidateOverrides = value ?? {};
+});
 export function taggerModels(): TaggerModel[] {
     return [...TAGGER_MODELS, ...customModels];
 }
 export async function loadTaggerModels(): Promise<TaggerModel[]> {
-    const value = await idbGet<TaggerModel[]>('kv', CUSTOM_MODELS_KEY);
+    const [value, overrides] = await Promise.all([
+        idbGet<TaggerModel[]>('kv', CUSTOM_MODELS_KEY),
+        idbGet<Record<string, string[]>>('kv', CANDIDATES_KEY),
+    ]);
     if (value) customModels = value.filter((model) => model.custom);
+    candidateOverrides = overrides ?? {};
     return taggerModels();
 }
 export function selectedTaggerModel(): TaggerModel | null {
@@ -99,6 +113,40 @@ export function activeTaggerModel(): TaggerModel {
     return selectedTaggerModel() ?? TAGGER_MODELS[0];
 }
 
+export function taggerModelExplanation(model: TaggerModel): string {
+    if (model.task === 'zero-shot-image-classification') {
+        return 'CLIP compares the image with the phrases in your vocabulary and ranks the ones that seem to fit. It is flexible and good for broad ideas like casual wear, monochrome, or gothic fashion, but it can only suggest phrases you provide.';
+    }
+    if (model.task === 'wd-tagger') {
+        return 'WD ViT looks at the image and picks from a large built-in list of illustration tags. It is more detailed and literal than CLIP, especially for anime-style artwork, but you cannot edit its tag list here.';
+    }
+    return 'This custom model is an image classifier supplied by you. It chooses from the labels built into that model, so its results and level of detail depend on what the model was trained to recognize.';
+}
+
+export function taggerCandidates(modelId = activeTaggerModel().id): string[] {
+    const model = taggerModels().find((item) => item.id === modelId);
+    if (!model) return [];
+    return [...(candidateOverrides[model.id] ?? model.candidates)];
+}
+
+export async function setTaggerCandidates(modelId: string, candidates: string[]): Promise<void> {
+    const model = taggerModels().find((item) => item.id === modelId);
+    if (!model || model.task !== 'zero-shot-image-classification') return;
+    const normalized = [...new Set(candidates.map((candidate) => candidate.trim().replace(/\s+/g, ' ')).filter(Boolean))].slice(0, 200);
+    if (!normalized.length) throw new Error('Add at least one tag candidate');
+    if (normalized.length === model.candidates.length && normalized.every((candidate, index) => candidate === model.candidates[index])) {
+        delete candidateOverrides[model.id];
+    } else {
+        candidateOverrides[model.id] = normalized;
+    }
+    await idbSet('kv', CANDIDATES_KEY, candidateOverrides);
+    classifierCache.delete(modelSource(model.model));
+    if (loadedId === modelSource(model.model)) {
+        loadedId = null;
+        classifier = null;
+    }
+}
+
 function modelSource(value: string): string {
     const model = value.trim();
     if (!model.startsWith('https://huggingface.co/')) return model;
@@ -113,7 +161,7 @@ export async function addTaggerModel(repo: string, label: string): Promise<Tagge
         id,
         label: label.trim() || source,
         size: 'download on demand',
-        description: 'Custom Hugging Face ONNX image classification model.',
+        description: 'This custom model is an image classifier supplied by you. It chooses from the labels built into that model, so its results and level of detail depend on what the model was trained to recognize.',
         model: source,
         kind: 'semantic',
         license: 'See repository',
@@ -167,7 +215,7 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
                 },
             });
             const modelClassifier: Classifier = async (input) =>
-                (await pipe(input, model.candidates)) as Array<{ label: string; score: number }>;
+                (await pipe(input, taggerCandidates(model.id))) as Array<{ label: string; score: number }>;
             classifierCache.set(modelId, modelClassifier);
             return modelClassifier;
         })();
@@ -210,13 +258,14 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
             for (let y = 0; y < 448; y++) {
                 for (let x = 0; x < 448; x++) {
                     const source = (y * 448 + x) * 3;
-                    pixels[y * 448 + x] = (resized.data[source] / 255 - 0.5) / 0.5;
-                    pixels[448 * 448 + y * 448 + x] = (resized.data[source + 1] / 255 - 0.5) / 0.5;
-                    pixels[2 * 448 * 448 + y * 448 + x] = (resized.data[source + 2] / 255 - 0.5) / 0.5;
+                    const target = (y * 448 + x) * 3;
+                    pixels[target] = resized.data[source] / 255;
+                    pixels[target + 1] = resized.data[source + 1] / 255;
+                    pixels[target + 2] = resized.data[source + 2] / 255;
                 }
             }
             const inputName = session.inputNames[0];
-            const output = await session.run({ [inputName]: new Tensor('float32', pixels, [1, 3, 448, 448]) });
+            const output = await session.run({ [inputName]: new Tensor('float32', pixels, [1, 448, 448, 3]) });
             const scores = output[session.outputNames[0]].data as Float32Array;
             return labels
                 .map((label, index) => ({ label: label.name, score: 1 / (1 + Math.exp(-scores[index])), category: label.category }))

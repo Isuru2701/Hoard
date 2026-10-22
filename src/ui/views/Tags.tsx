@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
 import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
-import { activeTaggerModel, addTaggerModel, cancelTaggerDownloads, deleteTaggerModel, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, taggerModels, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
+import { activeTaggerModel, addTaggerModel, cancelTaggerDownloads, deleteTaggerModel, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, setTaggerCandidates, TAGGER_MODELS, taggerCandidates, taggerModelExplanation, taggerModels, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
@@ -89,6 +89,8 @@ export function TagManager() {
     const [models, setModels] = useState(taggerModels);
     const [newModelRepo, setNewModelRepo] = useState('');
     const [newModelLabel, setNewModelLabel] = useState('');
+    const [candidateText, setCandidateText] = useState('');
+    const [savingCandidates, setSavingCandidates] = useState(false);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const drag = useRef<{ id: number; x: number; y: number; panX: number; panY: number } | null>(null);
@@ -149,8 +151,14 @@ export function TagManager() {
         void loadTaggerModels().then((value) => {
             setModels(value);
             setSelectedModelId(selectedTaggerModel()?.id ?? value[0].id);
+            const selected = selectedTaggerModel();
+            if (selected?.task === 'zero-shot-image-classification') setCandidateText(taggerCandidates(selected.id).join('\n'));
         });
-    }, [selectedModelId]);
+    }, []);
+
+    useEffect(() => {
+        if (model.task === 'zero-shot-image-classification') setCandidateText(taggerCandidates(model.id).join('\n'));
+    }, [model.id, model.task]);
 
     useEffect(() => {
         void taggerModelDownloaded().then(setModelDownloaded);
@@ -243,6 +251,7 @@ export function TagManager() {
                     <div className="mr-auto">
                         <div className="flex items-center gap-2 text-sm font-semibold"><Icon name="sparkles" size={14} className="text-accent" /> Auto-tag images locally</div>
                         <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">Uses a local vision model downloaded once and cached on this device. Nothing is uploaded.</p>
+                        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-yellow-300">Warning: tagging a large number of files may freeze the app while the local model processes them.</p>
                     </div>
                     <a className="text-xs text-accent hover:underline" href={model.url} target="_blank" rel="noreferrer">Hugging Face model ↗</a>
                 </div>
@@ -264,7 +273,43 @@ export function TagManager() {
                             {models.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                         </select>
                         <div className="mt-1 text-muted">{model.model} · {model.size} · {model.license}</div>
+                        <p className="mt-2 leading-relaxed text-muted">{taggerModelExplanation(model)}</p>
                     </div>
+                    {model.task === 'zero-shot-image-classification' && (
+                        <div className="rounded-md border border-line bg-black/10 px-3 py-2 text-xs">
+                            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted" htmlFor="tagger-candidates">Auto-generated tag vocabulary</label>
+                            <p className="mb-2 text-muted">One candidate per line. CLIP ranks these labels; use descriptive phrases such as “casual wear”, “monochrome”, or “gothic fashion”.</p>
+                            <textarea
+                                id="tagger-candidates"
+                                className="input min-h-32 resize-y text-xs"
+                                value={candidateText}
+                                disabled={running || loadingModel || savingCandidates}
+                                onChange={(event) => setCandidateText(event.target.value)}
+                                placeholder="casual wear&#10;monochrome&#10;gothic fashion"
+                            />
+                            <div className="mt-2 flex items-center gap-2">
+                                <span className="text-muted">{candidateText.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean).length} candidates</span>
+                                <button
+                                    className="btn btn-subtle ml-auto h-8 text-xs"
+                                    type="button"
+                                    disabled={running || loadingModel || savingCandidates}
+                                    onClick={() => {
+                                        setCandidateText(model.candidates.join('\n'));
+                                        void setTaggerCandidates(model.id, model.candidates).catch((error) => toast(error instanceof Error ? error.message : 'Could not reset vocabulary'));
+                                    }}
+                                >Reset defaults</button>
+                                <button
+                                    className="btn btn-primary h-8 text-xs"
+                                    type="button"
+                                    disabled={running || loadingModel || savingCandidates}
+                                    onClick={() => {
+                                        setSavingCandidates(true);
+                                        void setTaggerCandidates(model.id, candidateText.split(/\r?\n|,/)).then(() => toast('Tag vocabulary saved')).catch((error) => toast(error instanceof Error ? error.message : 'Could not save vocabulary')).finally(() => setSavingCandidates(false));
+                                    }}
+                                >{savingCandidates ? 'Saving…' : 'Save vocabulary'}</button>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                         <select className="input !h-9 !py-1 text-xs" aria-label="Maximum generated tags" value={maxTags} disabled={running} onChange={(e) => setMaxTags(Number(e.target.value))}>
                             {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} tags per image</option>)}

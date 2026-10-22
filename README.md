@@ -65,7 +65,14 @@ The included models are [Xenova/clip-vit-base-patch32](https://huggingface.co/Xe
 approximately 354 MB in its quantized Transformers.js variant, and
 [SmilingWolf/wd-vit-tagger-v3](https://huggingface.co/SmilingWolf/wd-vit-tagger-v3),
 approximately 379 MB. CLIP is a zero-shot image classifier prompted with
-art-reference concepts such as subject, mood, aesthetic, medium, and motifs.
+expressive art-reference concepts such as clothing styles (for example, casual wear,
+gothic fashion, and streetwear), color treatments (such as monochrome), mood,
+aesthetic, medium, and motifs. These are curated candidate labels rather than tags
+predicted from an open-ended vocabulary, so suggestions remain limited to the
+listed concepts. The vocabulary can be edited in Tag Graph for CLIP models, allowing
+you to add or remove the concepts most useful to your collection.
 WD ViT Tagger is a Danbooru-trained illustration tagger with its own ONNX
-inference path and general-tag vocabulary. Both models are downloaded on
-demand, cached locally, and run without uploading images.
+inference path and general-tag vocabulary. Custom ONNX models use the labels
+provided by their own model and may vary in how specific their results are.
+The model selector explains these differences in plain language. All models are
+downloaded on demand, cached locally, and run without uploading images.

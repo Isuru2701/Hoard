@@ -178,7 +178,7 @@ const FeedItem = memo(function FeedItem(props: {
     );
 });
 
-export function Feed({ items, emptyText }: { items: FileEntry[]; emptyText: ReactNode }) {
+export function Feed({ items, emptyText, showInfoInFolder = false }: { items: FileEntry[]; emptyText: ReactNode; showInfoInFolder?: boolean }) {
     const size = useStore((s) => s.feedSize);
     const selection = useStore((s) => s.selection);
     const metaItems = useStore((s) => s.meta.items);
@@ -272,7 +272,20 @@ export function Feed({ items, emptyText }: { items: FileEntry[]; emptyText: Reac
             { label: 'Open', icon: 'maximize', ev: 'feed_menu_open', onClick: () => onOpen(path) },
             { label: 'Add to canvas', icon: 'canvas', ev: 'feed_menu_add_to_canvas', onClick: addToCanvas },
             { label: fav ? 'Remove favorite' : 'Add to favorites', icon: 'heart', ev: 'feed_menu_favorite', onClick: () => sel.forEach((p) => updateItemMeta(p, { favorite: !fav })) },
-            { label: 'Show info', icon: 'panelRight', ev: 'feed_menu_info', onClick: () => store.patch({ rightOpen: true, focus: path }) },
+            {
+                label: 'Show info',
+                icon: 'panelRight',
+                ev: 'feed_menu_info',
+                onClick: () => {
+                    if (showInfoInFolder) {
+                        const file = items.find((item) => item.path === path);
+                        if (file) navigate({ kind: 'folder', path: file.folder });
+                        store.patch({ rightOpen: true, selection: [path], focus: path });
+                    } else {
+                        store.patch({ rightOpen: true, focus: path });
+                    }
+                },
+            },
             { label: sel.length > 1 ? `Move ${sel.length} to trash` : 'Move to trash', icon: 'trash', danger: true, ev: 'feed_menu_trash', onClick: () => void trashItems(sel.map((p) => ({ path: p, type: 'file' as const }))) },
         ]);
     };
@@ -409,7 +422,7 @@ export function CollectionPage({ kind, tag, tagDepth = 0 }: { kind: 'all' | 'fav
                     ) : null
                 }
             />
-            <Feed items={items} emptyText={empty} />
+            <Feed items={items} emptyText={empty} showInfoInFolder={kind === 'tag'} />
         </DropImport>
     );
 }

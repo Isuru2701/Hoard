@@ -10,9 +10,8 @@ import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
 import { TagManager } from './views/Tags.tsx';
-import { cancelTaggerDownloads, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
+import { cancelTaggerDownloads, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelExplanation, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
 
-const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
 const CANVAS_SHORTCUTS = [
     ['V', 'Select'],
     ['H', 'Hand / pan'],
@@ -84,6 +83,7 @@ function TagEditor({ path }: { path: string }) {
     const [modelId, setModelId] = useState(() => selectedTaggerModel()?.id ?? '');
     const [downloading, setDownloading] = useState(false);
     const [downloaded, setDownloaded] = useState(false);
+    const selectedModel = models.find((model) => model.id === modelId);
     useEffect(() => {
         void loadTaggerModels().then(setModels);
     }, []);
@@ -97,6 +97,10 @@ function TagEditor({ path }: { path: string }) {
         updateItemMeta(path, { tags: [...new Set([...tags, ...parts])] });
         setInput('');
         track('meta_tag_added');
+    };
+    const clearAll = () => {
+        updateItemMeta(path, { tags: [], autoTags: [] });
+        track('meta_tags_cleared');
     };
     const runAutoTag = async () => {
         if (tagging) return;
@@ -135,6 +139,7 @@ function TagEditor({ path }: { path: string }) {
                 >
                     {models.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
+                {selectedModel && <p className="mt-1 text-[10px] leading-relaxed text-muted">{taggerModelExplanation(selectedModel)}</p>}
                 <button className="btn btn-subtle mt-2 h-8 w-full justify-center text-xs" disabled={downloading || downloaded} onClick={() => {
                     setDownloading(true);
                     void loadTaggerModel().then(() => setDownloaded(true)).catch((error) => {
@@ -150,6 +155,12 @@ function TagEditor({ path }: { path: string }) {
                 <button className="mt-2 text-left text-[10px] text-accent hover:underline" onClick={() => navigate({ kind: 'tags' })}>
                     Configure the local model in Tag Graph →
                 </button>
+            </div>
+            <div className="mb-2 flex items-center gap-2">
+                <span className="section-label">Image tags</span>
+                {(tags.length > 0 || auto.length > 0) && (
+                    <button className="ml-auto text-[10px] text-danger hover:underline" onClick={clearAll}>Clear all</button>
+                )}
             </div>
             <div className="flex flex-wrap gap-1.5">
                 {tags.map((t) => (
@@ -221,11 +232,6 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                         ))}
                     </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                    {LABEL_COLORS.map((c) => (
-                        <button key={c} aria-label="Color label" className={`swatch !rounded-full ${meta.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => { track('meta_color_set'); updateItemMeta(entry.path, { color: meta.color === c ? undefined : c }); }} />
-                    ))}
-                </div>
             </Section>
             <Section title="Tags">
                 <TagEditor path={entry.path} />
@@ -255,6 +261,9 @@ function FilePanel({ entry }: { entry: FileEntry }) {
 
 function MultiPanel({ paths }: { paths: string[] }) {
     const [input, setInput] = useState('');
+    const [maxAutoTags, setMaxAutoTags] = useState(5);
+    const [tagging, setTagging] = useState(false);
+    const [done, setDone] = useState(0);
     const addAll = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -263,12 +272,35 @@ function MultiPanel({ paths }: { paths: string[] }) {
         setInput('');
         track('meta_bulk_tag_added', { count: paths.length });
     };
+    const runAutoTag = async () => {
+        if (tagging) return;
+        setTagging(true);
+        setDone(0);
+        try {
+            for (const path of paths) {
+                await autoTagItem(path, maxAutoTags);
+                setDone((value) => value + 1);
+            }
+            track('autotag_multi_finished', { count: paths.length });
+        } finally {
+            setTagging(false);
+        }
+    };
     return (
         <div className="p-4">
             <div className="text-3xl font-bold">{paths.length}</div>
             <div className="text-sm text-muted">items selected</div>
             <div className="section-label mb-2 mt-6">Add tags to all</div>
             <input className="input" placeholder="tag, another tag" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAll()} />
+            <div className="section-label mb-2 mt-6">Auto-tag each image</div>
+            <div className="flex items-center gap-2">
+                <select className="input !h-8 text-xs" value={maxAutoTags} disabled={tagging} onChange={(e) => setMaxAutoTags(Number(e.target.value))}>
+                    {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} max</option>)}
+                </select>
+                <Btn ev="multi_autotag_clicked" variant="subtle" icon="sparkles" disabled={tagging} onClick={() => void runAutoTag()}>
+                    {tagging ? `Tagging ${done}/${paths.length}…` : 'Auto-tag individually'}
+                </Btn>
+            </div>
             <div className="mt-6 flex flex-col gap-1">
                 <Btn ev="multi_favorite_clicked" icon="heart" onClick={() => paths.forEach((p) => updateItemMeta(p, { favorite: true }))}>Add to favorites</Btn>
                 <Btn ev="multi_trash_clicked" icon="trash" onClick={() => void trashItems(paths.map((p) => ({ path: p, type: 'file' as const })))}>Move to trash</Btn>

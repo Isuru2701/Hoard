@@ -18,6 +18,8 @@ export interface MediaRef {
 const pending = new Map<string, Promise<ThumbRec | null>>();
 const urls = new Map<string, string>();
 const dims = new Map<string, { w: number; h: number }>();
+const THUMB_VERSION = 'v2';
+const MAX_THUMB_EDGE = 1200;
 let dimsVersion = 0;
 const dimsListeners = new Set<() => void>();
 let notifyTimer = 0;
@@ -59,7 +61,7 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
     }
 }
 
-const key = (wsId: string, m: MediaRef) => `${wsId}|${m.path}|${m.size}|${m.modified}`;
+const key = (wsId: string, m: MediaRef) => `${THUMB_VERSION}|${wsId}|${m.path}|${m.size}|${m.modified}`;
 
 export function getThumb(wsId: string, root: Dir, m: MediaRef): Promise<ThumbRec | null> {
     const k = key(wsId, m);
@@ -147,15 +149,17 @@ function videoFrame(file: File): Promise<Source> {
 async function generate(file: File, video: boolean): Promise<ThumbRec | null> {
     const src = video ? await videoFrame(file) : await loadImage(file);
     try {
-        const s = Math.min(1, 480 / Math.max(src.w, src.h));
+        const s = Math.min(1, MAX_THUMB_EDGE / Math.max(src.w, src.h));
         const cw = Math.max(1, Math.round(src.w * s));
         const ch = Math.max(1, Math.round(src.h * s));
         const c = document.createElement('canvas');
         c.width = cw;
         c.height = ch;
-        const ctx = c.getContext('2d', { willReadFrequently: true })!;
+        const ctx = c.getContext('2d')!;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(src.el, 0, 0, cw, ch);
-        const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/webp', 0.82));
+        const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/webp', 0.9));
         if (!blob) return null;
         return { blob, w: src.w, h: src.h, tags: [] };
     } finally {
