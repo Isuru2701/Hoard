@@ -45,5 +45,10 @@ npm run desktop:build
 The generated `.msi` and NSIS `.exe` installer are placed under
 `src-tauri/target/release/bundle/`.
 
+GitHub Actions builds the same Windows artifacts automatically on pushes and
+pull requests. You can also run it manually from the Actions tab using
+**Build Windows desktop app**. The workflow uploads the installers and the
+portable executable as downloadable workflow artifacts.
+
 Desktop workspaces store their selected absolute folder path in the workspace
 registry. Images, videos, canvases, and `.hoard` metadata remain in that folder.
