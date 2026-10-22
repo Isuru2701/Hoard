@@ -30,6 +30,6 @@
     }
   },
   "cdnBase": "https://venus-static-01293ak.web.app/libs",
-  "buildTime": "2026-10-22T05:47:28.918Z",
+  "buildTime": "2026-10-22T06:07:31.723Z",
   "plugin": "@series-inc/rundot-game-sdk/vite"
 }

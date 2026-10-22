@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../state/store.ts';
 import { applyAutoTags, askConfirm, askText, deleteTag, getRoot, navigate, renameTag, toast } from '../../state/actions.ts';
-import { getThumb } from '../../lib/thumbs.ts';
+import { selectedTaggerModel, tagWithModel } from '../../lib/tagger.ts';
 import { Btn, Empty, IconBtn } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
 import { normTag } from '../RightPanel.tsx';
@@ -81,10 +81,10 @@ export function TagManager() {
 
 export function AutoTagger() {
     const scan = useStore((s) => s.scan)!;
-    const wsId = useStore((s) => s.wsId) ?? '';
     const [running, setRunning] = useState(false);
     const [done, setDone] = useState(0);
     const [total, setTotal] = useState(0);
+    const [maxTags, setMaxTags] = useState(5);
     const files = useMemo(() => scan.files.filter((f) => !f.hidden && f.kind !== 'file'), [scan]);
 
     const run = async () => {
@@ -100,15 +100,14 @@ export function AutoTagger() {
             Array.from({ length: 4 }, async () => {
                 while (i < files.length) {
                     const f = files[i++];
-                    const rec = await getThumb(wsId, root, f);
-                    if (rec) results[f.path] = rec.tags ?? [];
+                    results[f.path] = await tagWithModel(root, f, maxTags);
                     setDone((d) => d + 1);
                 }
             })
         );
         applyAutoTags(results);
         setRunning(false);
-        toast(`Auto-tagged ${Object.keys(results).length} items`);
+        toast(`Tagged ${Object.keys(results).length} items with ${selectedTaggerModel()?.label}`);
         track('autotag_run_finished', { count: Object.keys(results).length });
     };
 
@@ -120,8 +119,7 @@ export function AutoTagger() {
                 </div>
                 <h1 className="mt-4 text-2xl font-bold">Auto Tagger</h1>
                 <p className="mt-2 text-sm leading-relaxed text-muted">
-                    Analyses every image and video right on your device (nothing is uploaded) and adds tags for orientation (portrait, landscape, square), main colors (red, blue, teal…),
-                    brightness (dark, bright), and style (monochrome, colorful, transparent). Auto tags show with a ✦ in the info panel and can be removed individually.
+                    Uses the selected downloaded model locally (nothing is uploaded) to suggest visual tags. Suggestions are stored separately from manual tags and can be removed individually.
                 </p>
                 <div className="mt-6 rounded-xl border border-line p-4">
                     <div className="flex items-center justify-between text-sm">
@@ -137,6 +135,12 @@ export function AutoTagger() {
                             <div className="h-full bg-accent transition-all" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
                         </div>
                     )}
+                    <div className="mt-4 flex items-center gap-2">
+                        <label className="text-xs text-muted" htmlFor="workspace-max-tags">Max tags</label>
+                        <select id="workspace-max-tags" className="input !h-8 !w-20 !py-1 text-xs" value={maxTags} onChange={(e) => setMaxTags(Number(e.target.value))}>
+                            {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                    </div>
                     <Btn ev="autotag_run_clicked" variant="primary" className="mt-4" disabled={running || !files.length} onClick={() => void run()}>
                         {running ? 'Tagging…' : 'Tag all items'}
                     </Btn>

@@ -34,6 +34,7 @@ import {
 } from '../lib/workspaces.ts';
 import { clearDims } from '../lib/thumbs.ts';
 import { isTauri, pickNativeFolder } from '../lib/tauriFs.ts';
+import { tagWithModel } from '../lib/tagger.ts';
 import { track } from '../sdk/track.ts';
 
 let root: Dir | null = null;
@@ -370,6 +371,24 @@ export function applyAutoTags(results: Record<string, string[]>) {
     const items = { ...m.items };
     for (const [p, tags] of Object.entries(results)) items[p] = { ...(items[p] ?? {}), autoTags: tags };
     setMeta({ ...m, items });
+}
+
+export async function autoTagItem(path: string, maxTags: number): Promise<void> {
+    if (!root) return;
+    const entry = store.get().scan?.byPath.get(path);
+    if (!entry) {
+        toast('That item is no longer available');
+        return;
+    }
+    try {
+        const tags = await tagWithModel(root, entry, maxTags);
+        applyAutoTags({ [path]: tags });
+        toast(`Generated ${tags.length} auto-tag${tags.length === 1 ? '' : 's'}`);
+        track('autotag_item_finished', { count: tags.length });
+    } catch (error) {
+        console.warn('[autotag] model failed', error);
+        toast('Could not load the selected tagging model');
+    }
 }
 
 // ---------------------------------------------------------------- open canvases (flush before rename/delete)

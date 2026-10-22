@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { store, useStore } from '../state/store.ts';
-import { canvasAssetsPath, canvasName, getRoot, openViewer, renameEntry, trashItems, updateItemMeta } from '../state/actions.ts';
+import { autoTagItem, canvasAssetsPath, canvasName, getRoot, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
 import { basename, getFile } from '../lib/fs.ts';
 import { findFolder, type FileEntry } from '../lib/scan.ts';
 import { getDims } from '../lib/thumbs.ts';
@@ -8,6 +8,8 @@ import { downloadBlob } from '../lib/zip.ts';
 import { Btn, IconBtn, ThumbImg, formatBytes, formatDate } from './kit.tsx';
 import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
+import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
+import { customTaggerModel, loadTaggerModel, selectedTaggerModel, setCustomTaggerModel, setSelectedTaggerModel, TAGGER_MODELS } from '../lib/tagger.ts';
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
 const CANVAS_SHORTCUTS = [
@@ -28,6 +30,27 @@ const CANVAS_SHORTCUTS = [
     ['Ctrl + Shift + C', 'Copy as PNG'],
     ['Ctrl + scroll', 'Zoom'],
 ] as const;
+
+async function revealInExplorer(path: string) {
+    if (!isTauri()) {
+        toast('Reveal in File Explorer is available in the desktop app');
+        return;
+    }
+    const wsId = store.get().wsId;
+    const workspace = store.get().workspaces.find((item) => item.id === wsId);
+    if (!workspace?.path) {
+        toast('This workspace is not linked to a local folder');
+        return;
+    }
+    try {
+        const relative = path.replaceAll('/', '\\');
+        await revealNativePath(`${workspace.path.replace(/[\\/]$/, '')}\\${relative}`);
+        track('reveal_in_explorer_clicked');
+    } catch (error) {
+        console.warn('[reveal] failed', error);
+        toast('Could not open File Explorer');
+    }
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
     return (
@@ -54,6 +77,12 @@ function TagEditor({ path }: { path: string }) {
     const [input, setInput] = useState('');
     const tags = meta?.tags ?? [];
     const auto = meta?.autoTags ?? [];
+    const [maxAutoTags, setMaxAutoTags] = useState(5);
+    const [tagging, setTagging] = useState(false);
+    const [modelId, setModelId] = useState(() => selectedTaggerModel()?.id ?? TAGGER_MODELS[0].id);
+    const [customModel, setCustomModel] = useState(() => customTaggerModel());
+    const [loadingModel, setLoadingModel] = useState(false);
+    const [modelProgress, setModelProgress] = useState(0);
     const add = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -61,8 +90,78 @@ function TagEditor({ path }: { path: string }) {
         setInput('');
         track('meta_tag_added');
     };
+    const runAutoTag = async () => {
+        if (tagging) return;
+        setTagging(true);
+        try {
+            track('autotag_item_started', { maxTags: maxAutoTags });
+            await autoTagItem(path, maxAutoTags);
+        } finally {
+            setTagging(false);
+        }
+    };
+    const prepareModel = async () => {
+        if (loadingModel) return;
+        setLoadingModel(true);
+        setModelProgress(0);
+        try {
+            await loadTaggerModel(setModelProgress);
+        } catch (error) {
+            console.warn('[autotag] model download failed', error);
+            toast('Could not download the selected model');
+        } finally {
+            setLoadingModel(false);
+        }
+    };
     return (
         <div>
+            <div className="mb-3 rounded-lg border border-line bg-white/[0.025] p-2.5">
+                <div className="flex items-center gap-2">
+                    <Icon name="sparkles" size={13} className="text-accent" />
+                    <span className="text-xs font-medium">Model tagging</span>
+                    <select
+                        className="ml-auto h-7 rounded-md border border-line bg-white/[0.06] px-1.5 text-xs text-fg"
+                        aria-label="Maximum auto-tags"
+                        value={maxAutoTags}
+                        onChange={(e) => setMaxAutoTags(Number(e.target.value))}
+                    >
+                        {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} max</option>)}
+                    </select>
+                </div>
+                <select
+                    className="input mt-2 !h-8 !py-1 text-xs"
+                    aria-label="Tagging model"
+                    value={modelId}
+                    onChange={(e) => {
+                        setModelId(e.target.value);
+                        setSelectedTaggerModel(e.target.value);
+                    }}
+                >
+                    {TAGGER_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.size}</option>)}
+                </select>
+                <div className="mt-1 text-[10px] leading-relaxed text-muted">{selectedTaggerModel()?.description}</div>
+                {selectedTaggerModel() && (
+                    <a className="mt-1 inline-block text-[10px] text-accent hover:underline" href={selectedTaggerModel()!.url} target="_blank" rel="noreferrer">
+                        Model page, files and license ↗
+                    </a>
+                )}
+                <button className="btn btn-subtle mt-2 h-8 w-full justify-center text-xs" disabled={loadingModel} onClick={() => void prepareModel()}>
+                    <Icon name="download" size={13} />
+                    {loadingModel ? `Downloading… ${Math.round(modelProgress)}%` : 'Download / prepare model'}
+                </button>
+                <button className="btn btn-primary mt-2 h-8 w-full justify-center text-xs" disabled={tagging || loadingModel} onClick={() => void runAutoTag()}>
+                    <Icon name="sparkles" size={13} />
+                    {tagging ? 'Analysing…' : 'Tag this image'}
+                </button>
+                <input
+                    className="input mt-2 !h-8 !py-1 text-[10px]"
+                    placeholder="Custom Transformers.js model ID or URL"
+                    value={customModel}
+                    onChange={(e) => setCustomModel(e.target.value)}
+                    onBlur={() => setCustomTaggerModel(customModel)}
+                />
+                <div className="mt-1.5 text-[10px] leading-relaxed text-muted">Models download locally and run on this device. Custom models must be Transformers.js-compatible and under 500 MB.</div>
+            </div>
             <div className="flex flex-wrap gap-1.5">
                 {tags.map((t) => (
                     <span key={t} className="chip">
@@ -156,6 +255,7 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                 </div>
             </Section>
             <div className="flex flex-wrap gap-1 border-t border-line p-3">
+                <Btn ev="file_panel_reveal_clicked" icon="folder" onClick={() => void revealInExplorer(entry.path)}>Reveal in Explorer</Btn>
                 <Btn ev="file_panel_download" icon="download" onClick={download}>Download</Btn>
                 {!entry.hidden && <Btn ev="file_panel_rename" icon="edit" onClick={() => void renameEntry(entry.path, 'file')}>Rename</Btn>}
                 {!entry.hidden && <Btn ev="file_panel_trash" icon="trash" onClick={() => void trashItems([{ path: entry.path, type: 'file' }])}>Trash</Btn>}
@@ -230,6 +330,11 @@ function FolderPanel({ path }: { path: string }) {
                 <Row k="Canvases" v={node.canvases.length} />
                 <Row k="Including subfolders" v={`${node.totalCount} items`} />
             </Section>
+            <div className="border-t border-line p-3">
+                <Btn ev="folder_panel_reveal_clicked" icon="folder" className="w-full justify-center" onClick={() => void revealInExplorer(path)}>
+                    Reveal in Explorer
+                </Btn>
+            </div>
             <div className="border-t border-line p-4 text-xs leading-relaxed text-muted">Tip: click an image to see and edit its tags, source and notes here. Ctrl/Shift-click to select several.</div>
         </>
     );
@@ -249,6 +354,11 @@ function CanvasInfo({ path }: { path: string }) {
                 <Row k="File" v={basename(path)} />
                 <Row k="Images saved in" v={canvasAssetsPath(path)} />
             </Section>
+            <div className="border-t border-line p-3">
+                <Btn ev="canvas_panel_reveal_clicked" icon="folder" className="w-full justify-center" onClick={() => void revealInExplorer(path)}>
+                    Reveal in Explorer
+                </Btn>
+            </div>
             <div className="border-t border-line p-4">
                 <p className="text-xs leading-relaxed text-muted">Select a single image on the canvas to edit its tags, source and notes here.</p>
                 <div className="mt-4">

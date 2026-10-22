@@ -52,3 +52,23 @@ portable executable as downloadable workflow artifacts.
 
 Desktop workspaces store their selected absolute folder path in the workspace
 registry. Images, videos, canvases, and `.hoard` metadata remain in that folder.
+
+## Local model tagging
+
+Image tagging is explicit: select an image, choose a model in the right sidebar,
+download/prepare it, and then run **Tag this image**. Models run locally and
+generated suggestions are stored separately from manual tags.
+
+The included options are:
+
+- [WD14 ViT v2](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2) —
+  approximately 373 MB, art-focused vocabulary, best for anime, illustration
+  and character references.
+- [MobileCLIP-S2](https://huggingface.co/Xenova/mobileclip_s2) — smaller semantic
+  model for broad visual concepts.
+
+The model picker shows the estimated size and links to the model files and
+license. The custom model field accepts a Hugging Face model ID or a
+Transformers.js-compatible model URL. Custom models must remain below 500 MB
+and provide an image-classification ONNX model compatible with the selected
+runtime.
