@@ -47,7 +47,7 @@ If you have suggestions, make a pull request!
 
 
 # Releases
-- 
+[download from here](https://github.com/Isuru2701/hoard/releases/tag/desktop)
 
 ---
 # Run locally
