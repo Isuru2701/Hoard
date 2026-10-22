@@ -1,6 +1,7 @@
 import { idbGet, idbSet } from './idb.ts';
 import type { Dir } from './fs.ts';
 import { memoryRoot } from './memfs.ts';
+import { isTauri, nativeRoot, pickNativeFolder } from './tauriFs.ts';
 
 export interface WorkspaceRecord {
     id: string;
@@ -8,6 +9,7 @@ export interface WorkspaceRecord {
     color: string;
     kind: 'local' | 'browser';
     handle?: Dir;
+    path?: string;
     created: number;
     rootLabel: string;
     stats?: { folders: number; files: number; canvases: number };
@@ -28,7 +30,13 @@ export async function loadRegistry(): Promise<{ profile: Profile | null; workspa
     const [profile, workspaces] = await Promise.all([idbGet<Profile>('kv', 'profile'), idbGet<WorkspaceRecord[]>('kv', 'workspaces')]);
     return { profile: profile ?? null, workspaces: workspaces ?? [] };
 }
-export const saveWorkspaces = (list: WorkspaceRecord[]) => idbSet('kv', 'workspaces', list);
+export const saveWorkspaces = (list: WorkspaceRecord[]) => {
+    if (isTauri()) {
+        const persisted = list.map(({ handle: _handle, ...workspace }) => workspace);
+        return idbSet('kv', 'workspaces', persisted);
+    }
+    return idbSet('kv', 'workspaces', list);
+};
 export const saveProfile = (p: Profile) => idbSet('kv', 'profile', p);
 
 type PickerWindow = Window & { showDirectoryPicker?: (o?: { mode?: string; id?: string }) => Promise<Dir> };
@@ -38,6 +46,7 @@ export function canPickFolder(): boolean {
 }
 
 export async function pickFolder(): Promise<Dir> {
+    if (isTauri()) return (await pickNativeFolder()).handle;
     const fn = (window as PickerWindow).showDirectoryPicker;
     if (!fn) throw new DOMException('unsupported', 'NotSupportedError');
     return fn.call(window, { mode: 'readwrite', id: 'hoard' });
@@ -84,6 +93,7 @@ type PermHandle = {
 };
 
 export async function resolveRoot(rec: WorkspaceRecord, interactive: boolean): Promise<Dir | null> {
+    if (isTauri()) return rec.path ? nativeRoot(rec.path) : null;
     if (rec.kind === 'browser') return browserRoot(rec.id);
     const h = rec.handle;
     if (!h) return null;

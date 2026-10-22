@@ -16,6 +16,8 @@ export default defineConfig({
     plugins: [rundotGameLibrariesPlugin(), react(), tailwindcss()],
     server: {
         allowedHosts: true,
+        port: 1420,
+        strictPort: true,
     },
     build: {
         // Top-level await in the boot path (and in the SDK) needs a modern target.

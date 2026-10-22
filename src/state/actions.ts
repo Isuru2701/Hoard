@@ -34,6 +34,7 @@ import {
 } from '../lib/workspaces.ts';
 import { clearDims } from '../lib/thumbs.ts';
 import { downloadAppZip } from '../lib/appSource.ts';
+import { isTauri, pickNativeFolder } from '../lib/tauriFs.ts';
 import { track } from '../sdk/track.ts';
 
 let root: Dir | null = null;
@@ -130,9 +131,16 @@ async function setWorkspaces(list: WorkspaceRecord[]) {
 /** Returns an error message, '' when cancelled, or null on success. */
 export async function createWorkspace(name: string, kind: 'local' | 'browser', color: string): Promise<string | null> {
     let handle: Dir | undefined;
+    let nativePath: string | undefined;
     if (kind === 'local') {
         try {
-            handle = await pickFolder();
+            if (isTauri()) {
+                const picked = await pickNativeFolder();
+                handle = picked.handle;
+                nativePath = picked.path;
+            } else {
+                handle = await pickFolder();
+            }
         } catch (e) {
             const n = (e as DOMException)?.name;
             if (n === 'AbortError') return '';
@@ -147,6 +155,7 @@ export async function createWorkspace(name: string, kind: 'local' | 'browser', c
         color,
         kind,
         handle,
+        path: nativePath,
         created: Date.now(),
         rootLabel: kind === 'local' ? `📁 ${handle!.name}` : 'Stored in this browser',
     };

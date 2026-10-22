@@ -15,3 +15,35 @@ npm run dev
 ```
 
 For a standalone static build (outside RUN.world): `npm run build:bundled` and host the `dist/` folder.
+
+## Windows desktop app
+
+The desktop build uses Tauri 2. It keeps the React interface but uses native Rust
+filesystem commands for linked workspaces, so selected folders are available
+through the normal Windows filesystem instead of the browser File System Access API.
+
+Install the Windows prerequisites once:
+
+1. WebView2 (normally already installed on Windows 10/11).
+2. Rust using the MSVC toolchain.
+3. Visual Studio Build Tools with **Desktop development with C++**, including
+   the Windows SDK.
+
+Then run the development app:
+
+```
+npm install
+npm run desktop:dev
+```
+
+Create the Windows installers:
+
+```
+npm run desktop:build
+```
+
+The generated `.msi` and NSIS `.exe` installer are placed under
+`src-tauri/target/release/bundle/`.
+
+Desktop workspaces store their selected absolute folder path in the workspace
+registry. Images, videos, canvases, and `.hoard` metadata remain in that folder.
