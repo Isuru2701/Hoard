@@ -10,7 +10,7 @@ import { Icon } from './Icon.tsx';
 import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
 import { TagManager } from './views/Tags.tsx';
-import { loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
+import { cancelTaggerDownloads, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3a3a3'];
 const CANVAS_SHORTCUTS = [
@@ -90,6 +90,7 @@ function TagEditor({ path }: { path: string }) {
     useEffect(() => {
         void taggerModelDownloaded().then(setDownloaded);
     }, [modelId]);
+    useEffect(() => cancelTaggerDownloads, []);
     const add = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -136,7 +137,9 @@ function TagEditor({ path }: { path: string }) {
                 </select>
                 <button className="btn btn-subtle mt-2 h-8 w-full justify-center text-xs" disabled={downloading || downloaded} onClick={() => {
                     setDownloading(true);
-                    void loadTaggerModel().then(() => setDownloaded(true)).catch(() => toast('Could not download the selected model')).finally(() => setDownloading(false));
+                    void loadTaggerModel().then(() => setDownloaded(true)).catch((error) => {
+                        if (!(error instanceof DOMException && error.name === 'AbortError')) toast('Could not download the selected model');
+                    }).finally(() => setDownloading(false));
                 }}>
                     {downloading ? 'Downloading…' : downloaded ? 'Model downloaded' : 'Download model'}
                 </button>

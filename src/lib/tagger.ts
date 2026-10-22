@@ -68,6 +68,7 @@ let classifier: ((input: Blob) => Promise<Array<{ label: string; score: number }
 type Classifier = (input: Blob) => Promise<Array<{ label: string; score: number }>>;
 const classifierCache = new Map<string, Classifier>();
 const loadingModels = new Map<string, Promise<Classifier>>();
+const downloadControllers = new Map<string, AbortController>();
 
 void idbGet<string>('kv', MODEL_KEY).then((value) => {
     if (value) selectedId = value;
@@ -153,6 +154,8 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
     }
     let loading = loadingModels.get(modelId);
     if (!loading) {
+        const controller = new AbortController();
+        downloadControllers.set(modelId, controller);
         loading = (async () => {
             if (model.task === 'wd-tagger') return loadWdTagger(model, onProgress);
             if (model.task === 'onnx-image-classification') return loadGenericOnnx(model, onProgress);
@@ -170,8 +173,14 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
         })();
         loadingModels.set(modelId, loading);
         void loading.then(
-            () => loadingModels.delete(modelId),
-            () => loadingModels.delete(modelId)
+            () => {
+                loadingModels.delete(modelId);
+                downloadControllers.delete(modelId);
+            },
+            () => {
+                loadingModels.delete(modelId);
+                downloadControllers.delete(modelId);
+            }
         );
     }
 
@@ -184,7 +193,7 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
         const cachedTags = await idbGet<string>('kv', `${CUSTOM_ASSET_PREFIX}${model.id}:selected_tags.csv`);
         const [modelBuffer, tagsCsv] = await Promise.all([
             cachedModel ? cachedModel.arrayBuffer() : fetchAsset(`${base}model.onnx`, model, onProgress),
-            cachedTags ?? fetchText(`${base}selected_tags.csv`),
+            cachedTags ?? fetchText(`${base}selected_tags.csv`, model),
         ]);
         if (!tagsCsv) throw new Error('WD ViT Tagger labels could not be downloaded');
         await idbSet('kv', `${CUSTOM_ASSET_PREFIX}${model.id}:selected_tags.csv`, tagsCsv);
@@ -224,10 +233,10 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
         const modelBuffer = cachedModel ? await cachedModel.arrayBuffer() : await fetchAsset(`${base}model.onnx`, model, onProgress);
         let labels: string[] = [];
         const cachedLabels = await idbGet<string>('kv', `${CUSTOM_ASSET_PREFIX}${model.id}:labels.txt`);
-        const labelsText = cachedLabels ?? await fetchText(`${base}labels.txt`);
+        const labelsText = cachedLabels ?? await fetchText(`${base}labels.txt`, model);
         if (labelsText) labels = labelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
         if (!labels.length) {
-            const configText = await fetchText(`${base}config.json`);
+            const configText = await fetchText(`${base}config.json`, model);
             if (configText) {
                 const config = JSON.parse(configText) as { id2label?: Record<string, string> };
                 labels = Object.entries(config.id2label ?? {}).sort(([a], [b]) => Number(a) - Number(b)).map(([, value]) => value);
@@ -252,7 +261,7 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
         };
     }
     async function fetchAsset(url: string, model: TaggerModel, onProgress?: (value: number) => void): Promise<ArrayBuffer> {
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: downloadControllers.get(model.id)?.signal });
         if (!response.ok) throw new Error(`Could not download ${url.split('/').pop()}`);
         const total = Number(response.headers.get('content-length')) || 0;
         const reader = response.body?.getReader();
@@ -278,13 +287,17 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
         await idbSet('kv', `${READY_KEY}:${model.id}`, model.id);
         return bytes.buffer;
     }
-    async function fetchText(url: string): Promise<string | null> {
-        const response = await fetch(url);
+    async function fetchText(url: string, model?: TaggerModel): Promise<string | null> {
+        const response = await fetch(url, { signal: model ? downloadControllers.get(model.id)?.signal : undefined });
         return response.ok ? response.text() : null;
     }
     classifier = await loading;
     loadedId = modelId;
     void idbSet('kv', READY_KEY, modelId);
+}
+
+export function cancelTaggerDownloads(): void {
+    for (const controller of downloadControllers.values()) controller.abort();
 }
 
 export async function taggerModelDownloaded(): Promise<boolean> {

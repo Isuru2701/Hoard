@@ -30,6 +30,7 @@ import {
     saveProfile,
     saveProfiles,
     saveWorkspaces,
+    restoreView,
     uid,
     usingMemoryStorage,
     type WorkspaceRecord,
@@ -112,7 +113,7 @@ export async function bootRegistry() {
     try {
         const { profile, profiles, workspaces } = await loadRegistry();
         store.patch({ profile, profiles, workspaces, booted: true });
-        if (profile) {
+        if (isTauri() && profile) {
             const recent = workspaces
                 .filter((workspace) => !workspace.profileId || workspace.profileId === profile.id)
                 .sort((a, b) => (b.lastOpened ?? 0) - (a.lastOpened ?? 0))[0];
@@ -120,7 +121,7 @@ export async function bootRegistry() {
         }
     } catch (e) {
         console.warn(e);
-        store.patch({ booted: true });
+        store.patch({ booted: true, screen: 'picker', wsId: null, scan: null, selection: [], focus: null });
     }
 }
 
@@ -218,9 +219,13 @@ export async function openWorkspace(id: string): Promise<boolean> {
     }
     root = dir;
     const openedAt = Date.now();
-    const workspaces = store.get().workspaces.map((workspace) => workspace.id === id ? { ...workspace, lastOpened: openedAt } : workspace);
-    store.patch({ workspaces });
-    await saveWorkspaces(workspaces);
+    const workspaces = isTauri()
+        ? store.get().workspaces.map((workspace) => workspace.id === id ? { ...workspace, lastOpened: openedAt } : workspace)
+        : store.get().workspaces;
+    if (isTauri()) {
+        store.patch({ workspaces });
+        await saveWorkspaces(workspaces);
+    }
     clearDims();
     if (rec.kind === 'browser') navigator.storage?.persist?.().catch(() => {});
     const meta = await loadMeta(dir);
@@ -228,7 +233,7 @@ export async function openWorkspace(id: string): Promise<boolean> {
         wsId: id,
         meta,
         scan: null,
-        view: rec.lastView ?? { kind: 'home' },
+        view: isTauri() ? restoreView(rec.lastView) : { kind: 'home' },
         tabs: [],
         back: [],
         fwd: [],
@@ -240,12 +245,14 @@ export async function openWorkspace(id: string): Promise<boolean> {
     if (rec.kind === 'browser' && usingMemoryStorage)
         toast('This window blocks saving files, so this workspace only lasts until you close it. Download the app and host it to save for real.');
     await rescan();
-    const current = store.get();
-    const view = current.view;
-    const valid = view.kind === 'home' || view.kind === 'all' || view.kind === 'favorites' || view.kind === 'trash' || view.kind === 'tags'
-        || (view.kind === 'folder' && !!current.scan?.byPath.has(view.path))
-        || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path));
-    if (!valid) store.patch({ view: { kind: 'home' } });
+    if (isTauri()) {
+        const current = store.get();
+        const view = restoreView(current.view);
+        const valid = view.kind === 'home' || view.kind === 'all' || view.kind === 'favorites' || view.kind === 'trash' || view.kind === 'tags'
+            || (view.kind === 'folder' && !!current.scan?.byPath.has(view.path))
+            || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path));
+        store.patch({ view: valid ? view : { kind: 'home' } });
+    }
     return true;
 }
 
@@ -292,6 +299,7 @@ export async function rescan() {
 const tabbable = (v: View) => v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'tag';
 
 function persistLastView(view: View) {
+    if (!isTauri()) return;
     const current = store.get();
     if (!current.wsId) return;
     const workspaces = current.workspaces.map((workspace) => workspace.id === current.wsId ? { ...workspace, lastView: view } : workspace);

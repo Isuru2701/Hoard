@@ -53,6 +53,21 @@ export const saveProfile = (p: Profile) => idbSet('kv', 'profile', p);
 export const saveProfiles = (profiles: Profile[]) => idbSet('kv', 'profiles', profiles);
 export const deleteActiveProfile = () => idbDelete('kv', 'profile');
 
+export function restoreView(value: unknown): View {
+    if (!value || typeof value !== 'object') return { kind: 'home' };
+    const candidate = value as Partial<View>;
+    if (candidate.kind === 'home' || candidate.kind === 'all' || candidate.kind === 'favorites' || candidate.kind === 'trash' || candidate.kind === 'tags') {
+        return { kind: candidate.kind };
+    }
+    if (candidate.kind === 'folder' || candidate.kind === 'canvas') {
+        return typeof candidate.path === 'string' && candidate.path.length > 0 ? { kind: candidate.kind, path: candidate.path } : { kind: 'home' };
+    }
+    if (candidate.kind === 'tag') {
+        return typeof candidate.tag === 'string' && candidate.tag.length > 0 ? { kind: 'tag', tag: candidate.tag } : { kind: 'home' };
+    }
+    return { kind: 'home' };
+}
+
 type PickerWindow = Window & { showDirectoryPicker?: (o?: { mode?: string; id?: string }) => Promise<Dir> };
 
 export function canPickFolder(): boolean {

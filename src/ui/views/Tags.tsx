@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { store, useStore } from '../../state/store.ts';
 import { applyAutoTags, getRoot, toast } from '../../state/actions.ts';
-import { activeTaggerModel, addTaggerModel, deleteTaggerModel, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, taggerModels, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
+import { activeTaggerModel, addTaggerModel, cancelTaggerDownloads, deleteTaggerModel, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, TAGGER_MODELS, taggerModels, tagWithModel, taggerModelDownloaded } from '../../lib/tagger.ts';
 import { allTags } from '../../lib/meta.ts';
 import { Btn, Empty } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
@@ -108,6 +108,7 @@ export function TagManager() {
             toast(`${model.label} is ready on this device`);
         } catch (error) {
             console.warn('[autotag] model download failed', error);
+            if (error instanceof DOMException && error.name === 'AbortError') return;
             const reason = error instanceof Error ? error.message : String(error);
             const accessHint = /401|403|unauthorized|forbidden/i.test(reason)
                 ? 'The Hugging Face repository is private, gated, or missing public file access.'
@@ -154,6 +155,8 @@ export function TagManager() {
     useEffect(() => {
         void taggerModelDownloaded().then(setModelDownloaded);
     }, [selectedModelId]);
+
+    useEffect(() => cancelTaggerDownloads, []);
 
     const { tags, edges, nodes } = useMemo(() => {
         const counts = new Map<string, number>();
