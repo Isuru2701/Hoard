@@ -5,7 +5,6 @@ import {
     createCanvas,
     createFolder,
     createMenuItems,
-    downloadApp,
     importFiles,
     importInto,
     menuAt,
@@ -220,11 +219,6 @@ export default function Sidebar({ overlay }: { overlay: boolean }) {
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 {scan && <TreeChildren node={scan.tree} depth={0} />}
                 <div className="py-4 text-center text-xs text-muted/60">{scan && scan.folders.length + scan.canvases.length === 0 ? 'No folders yet' : 'That’s all'}</div>
-            </div>
-            <div className="border-t border-line p-2">
-                <Btn ev="sidebar_download_app_clicked" icon="pkg" className="w-full" onClick={downloadApp}>
-                    Download app (.zip)
-                </Btn>
             </div>
         </aside>
     );

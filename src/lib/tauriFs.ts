@@ -70,12 +70,14 @@ class NativeDirHandle {
     async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<NativeDirHandle> {
         const path = `${this.path}\\${name}`;
         if (options?.create) await invoke('create_directory', { path });
+        else if ((await invoke<'file' | 'directory' | null>('entry_kind', { path })) !== 'directory') throw new DOMException('Not found', 'NotFoundError');
         return new NativeDirHandle(path, name);
     }
 
     async getFileHandle(name: string, options?: { create?: boolean }): Promise<NativeFileHandle> {
         const path = `${this.path}\\${name}`;
         if (options?.create) await invoke('create_file', { path });
+        else if ((await invoke<'file' | 'directory' | null>('entry_kind', { path })) !== 'file') throw new DOMException('Not found', 'NotFoundError');
         return new NativeFileHandle(path, name);
     }
 

@@ -117,6 +117,20 @@ fn create_directory(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn entry_kind(path: String) -> Result<Option<&'static str>, String> {
+    let path = safe_path(&path)?;
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(Some(if metadata.is_dir() {
+            "directory"
+        } else {
+            "file"
+        })),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
 fn remove_entry(path: String, recursive: bool) -> Result<(), String> {
     let path = safe_path(&path)?;
     let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
@@ -150,6 +164,7 @@ pub fn run() {
             write_file,
             create_file,
             create_directory,
+            entry_kind,
             remove_entry,
             reveal_path
         ])

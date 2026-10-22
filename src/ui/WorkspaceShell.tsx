@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { store, useStore, viewKey, type View } from '../state/store.ts';
-import { canvasName, closeTab, downloadApp, goBack, goForward, navigate, rescan, toggleFullscreen } from '../state/actions.ts';
+import { canvasName, closeTab, goBack, goForward, navigate, rescan, toggleFullscreen } from '../state/actions.ts';
 import { basename, splitPath } from '../lib/fs.ts';
 import { IconBtn } from './kit.tsx';
 import { Icon, type IconName } from './Icon.tsx';
@@ -86,7 +86,6 @@ function TopBar() {
             </div>
             <IconBtn icon="search" title="Search (Ctrl+K)" ev="search_opened" onClick={() => store.patch({ searchOpen: true })} />
             <IconBtn icon="maximize" title="Fullscreen" ev="ui_fullscreen_clicked" onClick={toggleFullscreen} />
-            <IconBtn icon="download" title="Download app as .zip" ev="topbar_download_app_clicked" onClick={downloadApp} />
         </header>
     );
 }

@@ -42,6 +42,7 @@ export const saveProfile = (p: Profile) => idbSet('kv', 'profile', p);
 type PickerWindow = Window & { showDirectoryPicker?: (o?: { mode?: string; id?: string }) => Promise<Dir> };
 
 export function canPickFolder(): boolean {
+    if (isTauri()) return true;
     return typeof (window as PickerWindow).showDirectoryPicker === 'function';
 }
 

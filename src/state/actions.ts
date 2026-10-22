@@ -33,7 +33,6 @@ import {
     type WorkspaceRecord,
 } from '../lib/workspaces.ts';
 import { clearDims } from '../lib/thumbs.ts';
-import { downloadAppZip } from '../lib/appSource.ts';
 import { isTauri, pickNativeFolder } from '../lib/tauriFs.ts';
 import { track } from '../sdk/track.ts';
 
@@ -649,22 +648,4 @@ export function createMenuItems(folder: string): MenuItem[] {
         { label: 'New canvas', icon: 'canvas', ev: 'create_menu_canvas', onClick: () => void createCanvas(folder) },
         { label: 'Import images & videos', icon: 'upload', ev: 'create_menu_import', onClick: () => void importInto(folder || 'Inbox') },
     ];
-}
-
-// ---------------------------------------------------------------- app zip
-let zipping = false;
-export async function downloadApp() {
-    track('app_zip_clicked');
-    if (zipping) return;
-    zipping = true;
-    toast('Packing the app…');
-    try {
-        const n = await downloadAppZip();
-        toast(`Download started (${n} files)`);
-    } catch (e) {
-        console.warn(e);
-        toast('Could not create the zip');
-    } finally {
-        zipping = false;
-    }
 }

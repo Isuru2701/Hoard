@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../state/store.ts';
-import { createWorkspace, downloadApp, menuAt, openWorkspace, removeWorkspace, saveProfileAction } from '../state/actions.ts';
+import { createWorkspace, menuAt, openWorkspace, removeWorkspace, saveProfileAction } from '../state/actions.ts';
 import { WS_COLORS, canPickFolder, type Profile, type WorkspaceRecord } from '../lib/workspaces.ts';
 import { Btn, IconBtn, SectionLabel } from './kit.tsx';
 import { Icon } from './Icon.tsx';
@@ -145,9 +145,6 @@ export default function WorkspacePicker() {
                         <div className="logo">h.</div>
                         <span className="font-serif text-xl font-semibold">hoard.</span>
                     </div>
-                    <Btn ev="picker_download_app_clicked" variant="subtle" icon="download" onClick={downloadApp}>
-                        Download app (.zip)
-                    </Btn>
                 </div>
                 <h1 className="mt-10 text-4xl font-bold tracking-tight sm:text-5xl">{profile ? 'Welcome back' : 'Welcome to hoard'}</h1>
                 <p className="mt-2 text-muted">{profile ? 'Select a workspace to continue.' : 'Create a profile to get started.'}</p>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { store, useStore } from '../../state/store.ts';
-import { createMenuItems, downloadApp, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
+import { createMenuItems, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
 import { basename } from '../../lib/fs.ts';
 import { findFolder } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
@@ -61,9 +61,6 @@ export default function Home() {
                         }}
                     >
                         Create
-                    </Btn>
-                    <Btn ev="home_download_app_clicked" icon="pkg" onClick={downloadApp}>
-                        Download app
                     </Btn>
                 </div>
                 <div className="mx-auto max-w-5xl px-5 pb-10 sm:px-8">
