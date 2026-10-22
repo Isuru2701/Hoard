@@ -1202,13 +1202,18 @@ export class CanvasEngine {
     private onWheel = (ev: WheelEvent) => {
         ev.preventDefault();
         const s = this.local(ev);
-        if (ev.ctrlKey || ev.metaKey) this.zoomAt(s.x, s.y, Math.exp(-ev.deltaY * 0.01));
-        else {
-            let dx = ev.deltaX, dy = ev.deltaY;
-            if (ev.deltaMode === 1) {
-                dx *= 16;
-                dy *= 16;
-            }
+        let dx = ev.deltaX, dy = ev.deltaY;
+        if (ev.deltaMode === 1) {
+            dx *= 16;
+            dy *= 16;
+        } else if (ev.deltaMode === 2) {
+            dx *= this.vw || 1;
+            dy *= this.vh || 1;
+        }
+        if (ev.ctrlKey || ev.metaKey) {
+            const factor = clamp(Math.exp(-dy * 0.0025), 0.92, 1.08);
+            this.zoomAt(s.x, s.y, factor);
+        } else {
             if (ev.shiftKey && !dx) {
                 dx = dy;
                 dy = 0;

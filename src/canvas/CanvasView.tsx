@@ -229,8 +229,11 @@ export default function CanvasView({ path }: { path: string }) {
     useEffect(() => {
         if (!engine) return;
         const sel = engine.selectedEls();
-        const f = sel.length === 1 && sel[0].type === 'image' ? joinPath(assetsPath, sel[0].asset) : null;
-        if (store.get().focus !== f) store.patch({ focus: f });
+        const selectedPaths = sel.flatMap((el) => (el.type === 'image' ? [joinPath(assetsPath, el.asset)] : []));
+        const f = selectedPaths.length === 1 ? selectedPaths[0] : null;
+        const current = store.get();
+        const sameSelection = current.selection.length === selectedPaths.length && current.selection.every((path, i) => path === selectedPaths[i]);
+        if (current.focus !== f || !sameSelection) store.patch({ focus: f, selection: selectedPaths });
     });
 
     useEffect(() => {

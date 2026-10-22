@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { store, useStore } from '../state/store.ts';
-import { autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
+import { askConfirm, autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
 import { basename, getFile } from '../lib/fs.ts';
 import { findFolder, type FileEntry } from '../lib/scan.ts';
 import { getDims } from '../lib/thumbs.ts';
@@ -99,8 +99,18 @@ function TagEditor({ path }: { path: string }) {
         track('meta_tag_added');
     };
     const clearAll = () => {
-        updateItemMeta(path, { tags: [], autoTags: [] });
-        track('meta_tags_cleared');
+        void askConfirm('Clear all tags?', 'This will remove both manual and auto-generated tags from this image.', 'Clear tags').then((ok) => {
+            if (!ok) return;
+            updateItemMeta(path, { tags: [], autoTags: [] });
+            track('meta_tags_cleared');
+        });
+    };
+    const clearAuto = () => {
+        void askConfirm('Clear auto-generated tags?', 'Manual tags will be kept.', 'Clear auto tags').then((ok) => {
+            if (!ok) return;
+            updateItemMeta(path, { autoTags: [] });
+            track('meta_autotags_cleared');
+        });
     };
     const runAutoTag = async () => {
         if (tagging) return;
@@ -159,7 +169,10 @@ function TagEditor({ path }: { path: string }) {
             <div className="mb-2 flex items-center gap-2">
                 <span className="section-label">Image tags</span>
                 {(tags.length > 0 || auto.length > 0) && (
-                    <button className="ml-auto text-[10px] text-danger hover:underline" onClick={clearAll}>Clear all</button>
+                    <div className="ml-auto flex items-center gap-2">
+                        {auto.length > 0 && <button className="text-[10px] text-muted hover:text-fg hover:underline" onClick={clearAuto}>Clear auto</button>}
+                        <button className="text-[10px] text-muted hover:text-fg hover:underline" onClick={clearAll}>Clear all</button>
+                    </div>
                 )}
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -264,6 +277,11 @@ function MultiPanel({ paths }: { paths: string[] }) {
     const [maxAutoTags, setMaxAutoTags] = useState(5);
     const [tagging, setTagging] = useState(false);
     const [done, setDone] = useState(0);
+    const [models, setModels] = useState(taggerModels);
+    const [modelId, setModelId] = useState(() => selectedTaggerModel()?.id ?? '');
+    useEffect(() => {
+        void loadTaggerModels().then(setModels);
+    }, []);
     const addAll = () => {
         const parts = input.split(',').map(normTag).filter(Boolean);
         if (!parts.length) return;
@@ -293,6 +311,18 @@ function MultiPanel({ paths }: { paths: string[] }) {
             <div className="section-label mb-2 mt-6">Add tags to all</div>
             <input className="input" placeholder="tag, another tag" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAll()} />
             <div className="section-label mb-2 mt-6">Auto-tag each image</div>
+            <select
+                className="input mb-2 !h-8 text-xs"
+                aria-label="Tagging model"
+                value={modelId}
+                disabled={tagging}
+                onChange={(event) => {
+                    setModelId(event.target.value);
+                    setSelectedTaggerModel(event.target.value);
+                }}
+            >
+                {models.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
             <div className="flex items-center gap-2">
                 <select className="input !h-8 text-xs" value={maxAutoTags} disabled={tagging} onChange={(e) => setMaxAutoTags(Number(e.target.value))}>
                     {[3, 5, 8, 10].map((n) => <option key={n} value={n}>{n} max</option>)}

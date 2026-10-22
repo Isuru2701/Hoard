@@ -344,8 +344,8 @@ textarea.input {
     color: #ddd;
 }
 .chip-auto {
-    background: rgba(91, 156, 255, 0.12);
-    color: #a8c8ff;
+    background: rgba(130, 160, 210, 0.1);
+    color: #9aaccc;
 }
 .swatch {
     width: 22px;
