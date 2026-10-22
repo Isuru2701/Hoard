@@ -7,7 +7,6 @@ import { getDims } from '../lib/thumbs.ts';
 import { downloadBlob } from '../lib/zip.ts';
 import { Btn, IconBtn, ThumbImg, formatBytes, formatDate } from './kit.tsx';
 import { Icon } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
 import { TagManager } from './views/Tags.tsx';
 import { cancelTaggerDownloads, loadTaggerModel, loadTaggerModels, selectedTaggerModel, setSelectedTaggerModel, taggerModelExplanation, taggerModelDownloaded, taggerModels } from '../lib/tagger.ts';
@@ -45,7 +44,7 @@ async function revealInExplorer(path: string) {
     try {
         const relative = path.replaceAll('/', '\\');
         await revealNativePath(`${workspace.path.replace(/[\\/]$/, '')}\\${relative}`);
-        track('reveal_in_explorer_clicked');
+        
     } catch (error) {
         console.warn('[reveal] failed', error);
         toast('Could not open File Explorer');
@@ -96,27 +95,27 @@ function TagEditor({ path }: { path: string }) {
         if (!parts.length) return;
         updateItemMeta(path, { tags: [...new Set([...tags, ...parts])] });
         setInput('');
-        track('meta_tag_added');
+        
     };
     const clearAll = () => {
         void askConfirm('Clear all tags?', 'This will remove both manual and auto-generated tags from this image.', 'Clear tags').then((ok) => {
             if (!ok) return;
             updateItemMeta(path, { tags: [], autoTags: [] });
-            track('meta_tags_cleared');
+            
         });
     };
     const clearAuto = () => {
         void askConfirm('Clear auto-generated tags?', 'Manual tags will be kept.', 'Clear auto tags').then((ok) => {
             if (!ok) return;
             updateItemMeta(path, { autoTags: [] });
-            track('meta_autotags_cleared');
+            
         });
     };
     const runAutoTag = async () => {
         if (tagging) return;
         setTagging(true);
         try {
-            track('autotag_item_started', { maxTags: maxAutoTags });
+            
             await autoTagItem(path, maxAutoTags);
         } finally {
             setTagging(false);
@@ -179,7 +178,7 @@ function TagEditor({ path }: { path: string }) {
                 {tags.map((t) => (
                     <span key={t} className="chip">
                         {t}
-                        <button aria-label="Remove tag" className="grid h-5 w-5 place-items-center rounded hover:bg-white/10" onClick={() => { track('meta_tag_removed'); updateItemMeta(path, { tags: tags.filter((x) => x !== t) }); }}>
+                        <button aria-label="Remove tag" className="grid h-5 w-5 place-items-center rounded hover:bg-white/10" onClick={() => { updateItemMeta(path, { tags: tags.filter((x) => x !== t) }); }}>
                             <Icon name="x" size={11} />
                         </button>
                     </span>
@@ -188,7 +187,7 @@ function TagEditor({ path }: { path: string }) {
                     <span key={'a' + t} className="chip chip-auto" title="Auto tag">
                         <Icon name="sparkles" size={11} />
                         {t}
-                        <button aria-label="Remove auto tag" className="grid h-5 w-5 place-items-center rounded hover:bg-white/10" onClick={() => { track('meta_autotag_removed'); updateItemMeta(path, { autoTags: auto.filter((x) => x !== t) }); }}>
+                        <button aria-label="Remove auto tag" className="grid h-5 w-5 place-items-center rounded hover:bg-white/10" onClick={() => { updateItemMeta(path, { autoTags: auto.filter((x) => x !== t) }); }}>
                             <Icon name="x" size={11} />
                         </button>
                     </span>
@@ -239,7 +238,7 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                     <IconBtn icon="heart" title="Favorite" ev="meta_favorite_toggled" filled={meta.favorite} active={meta.favorite} onClick={() => updateItemMeta(entry.path, { favorite: !meta.favorite })} />
                     <div className="ml-2 flex">
                         {[1, 2, 3, 4, 5].map((n) => (
-                            <button key={n} aria-label={`${n} stars`} className={`grid h-8 w-7 place-items-center ${(meta.rating ?? 0) >= n ? 'text-yellow-400' : 'text-muted'}`} onClick={() => { track('meta_rating_set', { n }); updateItemMeta(entry.path, { rating: meta.rating === n ? 0 : n }); }}>
+                            <button key={n} aria-label={`${n} stars`} className={`grid h-8 w-7 place-items-center ${(meta.rating ?? 0) >= n ? 'text-yellow-400' : 'text-muted'}`} onClick={() => { updateItemMeta(entry.path, { rating: meta.rating === n ? 0 : n }); }}>
                                 <Icon name="star" size={15} filled={(meta.rating ?? 0) >= n} />
                             </button>
                         ))}
@@ -288,7 +287,7 @@ function MultiPanel({ paths }: { paths: string[] }) {
         const items = store.get().meta.items;
         for (const p of paths) updateItemMeta(p, { tags: [...new Set([...(items[p]?.tags ?? []), ...parts])] });
         setInput('');
-        track('meta_bulk_tag_added', { count: paths.length });
+        
     };
     const runAutoTag = async () => {
         if (tagging) return;
@@ -299,7 +298,7 @@ function MultiPanel({ paths }: { paths: string[] }) {
                 await autoTagItem(path, maxAutoTags);
                 setDone((value) => value + 1);
             }
-            track('autotag_multi_finished', { count: paths.length });
+            
         } finally {
             setTagging(false);
         }

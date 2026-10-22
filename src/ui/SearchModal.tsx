@@ -5,7 +5,6 @@ import { dirname } from '../lib/fs.ts';
 import { allTags } from '../lib/meta.ts';
 import { ThumbImg } from './kit.tsx';
 import { Icon } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 
 interface Result {
     key: string;
@@ -63,7 +62,7 @@ export default function SearchModal() {
     if (!open) return null;
     const close = () => store.patch({ searchOpen: false });
     const pick = (r: Result) => {
-        track('search_result_opened', { kind: r.kind });
+        
         close();
         r.go();
     };

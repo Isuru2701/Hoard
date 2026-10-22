@@ -10,7 +10,6 @@ import { FILLS, FONT_SIZES, NOTE_BGS, STROKES, WIDTHS, type Tool } from './types
 import { IconBtn } from '../ui/kit.tsx';
 import type { IconName } from '../ui/Icon.tsx';
 import { LibraryDrawer, NoteEditor, SelectionPanel } from './CanvasPanels.tsx';
-import { track } from '../sdk/track.ts';
 import { isTauri, nativeFile } from '../lib/tauriFs.ts';
 
 const CLIP_MARKER = 'hoard:canvas-elements';
@@ -30,7 +29,7 @@ const TOOLS: { t: Tool; icon: IconName; label: string }[] = [
 ];
 
 async function exportPng(engine: CanvasEngine, mode: 'clipboard' | 'download') {
-    track('canvas_export_png', { mode });
+    
     const blob = await engine.exportPNG(engine.selected.size > 0);
     if (!blob) return toast('Nothing to export');
     if (mode === 'clipboard') {
@@ -58,7 +57,7 @@ function StyleBar({ engine, left }: { engine: CanvasEngine; left: number }) {
     if (!stroke && !note && !font) return null;
     const s = engine.style;
     const apply = (p: Parameters<CanvasEngine['applyStyle']>[0]) => {
-        track('canvas_style_changed', { key: Object.keys(p)[0] });
+        
         engine.applyStyle(p);
     };
     return (
@@ -160,7 +159,7 @@ export default function CanvasView({ path }: { path: string }) {
         };
         eng.onCommit = schedule;
         eng.onCamera = schedule;
-        eng.onAction = (name, props) => track(`canvas_${name}`, props);
+        eng.onAction = (name, props) => 
         eng.onMenu = (x, y, onEl) => openCanvasMenu(eng, x, y, onEl);
         const unregister = registerCanvas(path, async () => {
             await flush();
@@ -267,7 +266,7 @@ export default function CanvasView({ path }: { path: string }) {
             const files = [...dt.files].filter(isMediaFile);
             const text = dt.getData('text/plain');
             e.preventDefault();
-            track('canvas_paste', { files: files.length });
+            
             const libraryPrefix = 'hoard:library-paths:';
             if (text.startsWith(libraryPrefix)) {
                 try {
@@ -303,13 +302,13 @@ export default function CanvasView({ path }: { path: string }) {
         const raw = e.dataTransfer.getData(DRAG_MIME);
         const root = getRoot();
         if (raw && root) {
-            track('canvas_library_dropped');
+            
             const files = await Promise.all((JSON.parse(raw) as string[]).map((p) => getFile(root, p)));
             return addFiles(files, at);
         }
         const files = [...e.dataTransfer.files];
         if (files.length) {
-            track('canvas_files_dropped', { count: files.length });
+            
             return addFiles(files, at);
         }
         const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
@@ -385,9 +384,9 @@ export default function CanvasView({ path }: { path: string }) {
                     {engine.crop && (
                         <div className="floating absolute left-1/2 top-16 z-10 flex -translate-x-1/2 items-center gap-2 rounded-xl px-3 py-1.5 text-sm">
                             Drag the handles to crop
-                            <button className="btn btn-primary !h-7" onClick={() => { track('canvas_crop_apply_clicked'); engine.applyCrop(); }}>Done</button>
-                            <button className="btn !h-7" onClick={() => { track('canvas_crop_reset_clicked'); engine.resetCrop(); }}>Reset</button>
-                            <button className="btn !h-7" onClick={() => { track('canvas_crop_cancel_clicked'); engine.cancelCrop(); }}>Cancel</button>
+                            <button className="btn btn-primary !h-7" onClick={() => { engine.applyCrop(); }}>Done</button>
+                            <button className="btn !h-7" onClick={() => { engine.resetCrop(); }}>Reset</button>
+                            <button className="btn !h-7" onClick={() => { engine.cancelCrop(); }}>Cancel</button>
                         </div>
                     )}
 
@@ -412,7 +411,7 @@ export default function CanvasView({ path }: { path: string }) {
                             </>
                         )}
                         <IconBtn icon="zoomOut" title="Zoom out (Ctrl -)" ev="canvas_zoom_out_clicked" onClick={() => engine.zoomBy(0.8)} />
-                        <button className="h-8 w-12 shrink-0 rounded-md text-xs font-medium text-muted hover:bg-white/5" title="Reset to 100%" onClick={() => { track('canvas_zoom_reset_clicked'); engine.setZoom(1); }}>
+                        <button className="h-8 w-12 shrink-0 rounded-md text-xs font-medium text-muted hover:bg-white/5" title="Reset to 100%" onClick={() => { engine.setZoom(1); }}>
                             {zoom}%
                         </button>
                         <IconBtn icon="zoomIn" title="Zoom in (Ctrl +)" ev="canvas_zoom_in_clicked" onClick={() => engine.zoomBy(1.25)} />

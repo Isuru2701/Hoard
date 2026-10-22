@@ -12,7 +12,6 @@ import TrashView from './views/Trash.tsx';
 import SearchModal from './SearchModal.tsx';
 import Viewer from './Viewer.tsx';
 import CanvasView from '../canvas/CanvasView.tsx';
-import { track } from '../sdk/track.ts';
 import { Empty } from './kit.tsx';
 
 function useWidth() {
@@ -55,7 +54,6 @@ function Breadcrumbs() {
                             <button
                                 className="truncate text-muted hover:text-fg"
                                 onClick={() => {
-                                    track('breadcrumb_clicked');
                                     navigate({ kind: 'folder', path });
                                 }}
                             >
@@ -101,7 +99,6 @@ function TabBar() {
                     key={viewKey(t)}
                     className={`tab ${viewKey(t) === active ? 'on' : ''}`}
                     onClick={() => {
-                        track('tab_selected');
                         navigate(t);
                     }}
                 >
@@ -112,7 +109,6 @@ function TabBar() {
                         aria-label="Close tab"
                         onClick={(e) => {
                             e.stopPropagation();
-                            track('tab_closed');
                             closeTab(t);
                         }}
                     >
@@ -163,11 +159,9 @@ export default function WorkspaceShell() {
             const mod = e.ctrlKey || e.metaKey;
             if (mod && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
-                track('search_shortcut_used');
                 store.patch({ searchOpen: true });
             } else if (mod && e.key === '\\') {
                 e.preventDefault();
-                track('ui_left_sidebar_shortcut');
                 store.patch({ leftOpen: !store.get().leftOpen });
             }
         };

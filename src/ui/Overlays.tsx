@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { store, useStore } from '../state/store.ts';
 import { Icon } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 
 function Dialog() {
     const d = useStore((s) => s.dialog);
@@ -15,11 +14,9 @@ function Dialog() {
     }, [d]);
     if (!d) return null;
     const ok = () => {
-        track('dialog_confirmed', { kind: d.kind });
         d.resolve(d.kind === 'prompt' ? value : true);
     };
     const cancel = () => {
-        track('dialog_cancelled', { kind: d.kind });
         d.resolve(d.kind === 'prompt' ? null : false);
     };
     return (
@@ -80,7 +77,6 @@ function Menu() {
                         className={`flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] hover:bg-white/8 ${it.danger ? 'text-red-400' : 'text-fg'}`}
                         onClick={() => {
                             store.patch({ menu: null });
-                            track(it.ev);
                             it.onClick();
                         }}
                     >

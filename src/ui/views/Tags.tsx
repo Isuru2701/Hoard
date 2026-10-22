@@ -126,7 +126,7 @@ export function TagManager() {
         if (!root || running || !imageFiles.length) return;
         setRunning(true);
         setDone(0);
-        track('autotag_run_started', { count: imageFiles.length, maxTags });
+        
         const results: Record<string, string[]> = {};
         let failures = 0;
         try {
@@ -141,7 +141,7 @@ export function TagManager() {
             }
             applyAutoTags(results);
             toast(`Tagged ${Object.keys(results).length} image${Object.keys(results).length === 1 ? '' : 's'}${failures ? `; ${failures} failed` : ''}`);
-            track('autotag_run_finished', { count: Object.keys(results).length, failures });
+            
         } finally {
             setRunning(false);
         }
@@ -224,7 +224,7 @@ export function TagManager() {
             const currentNode = nodeDrag.current;
             if (!currentNode.moved) {
                 store.patch({ tagGraphTag: currentNode.tag, tagGraphDepth: 0 });
-                track('tag_graph_node_selected');
+                
             }
             suppressNodeClick.current = true;
             nodeDrag.current = null;

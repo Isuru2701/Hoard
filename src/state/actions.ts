@@ -38,7 +38,7 @@ import {
 import { clearDims } from '../lib/thumbs.ts';
 import { isTauri, pickNativeFolder } from '../lib/tauriFs.ts';
 import { tagWithModel } from '../lib/tagger.ts';
-import { track } from '../sdk/track.ts';
+
 
 let root: Dir | null = null;
 export const getRoot = () => root;
@@ -133,7 +133,7 @@ export async function saveProfileAction(name: string, username: string, createNe
         : [...store.get().profiles, p];
     store.patch({ profile: p, profiles });
     await Promise.all([saveProfile(p), saveProfiles(profiles)]);
-    track('profile_saved');
+    
 }
 
 export async function selectProfile(id: string) {
@@ -162,7 +162,6 @@ export async function deleteProfileAction(): Promise<WorkspaceRecord[]> {
     const nextProfile = profiles[0] ?? null;
     store.patch({ profile: nextProfile, profiles, workspaces, screen: 'picker', wsId: null, scan: null, selection: [], focus: null });
     await Promise.all([deleteActiveProfile(), saveProfiles(profiles), saveWorkspaces(workspaces)]);
-    track('profile_deleted', { workspaceCount: workspaceRecords.length });
     return workspaceRecords;
 }
 
@@ -204,7 +203,6 @@ export async function createWorkspace(name: string, kind: 'local' | 'browser', c
         rootLabel: kind === 'local' ? `📁 ${handle!.name}` : 'Stored in this browser',
     };
     await setWorkspaces([...store.get().workspaces, rec]);
-    track('workspace_created', { kind });
     await openWorkspace(rec.id);
     return null;
 }
@@ -241,7 +239,6 @@ export async function openWorkspace(id: string): Promise<boolean> {
         focus: null,
         screen: 'picker',
     });
-    track('workspace_opened', { kind: rec.kind });
     if (rec.kind === 'browser' && usingMemoryStorage)
         toast('This window blocks saving files, so this workspace only lasts until you close it. Download the app and host it to save for real.');
     await rescan();
@@ -279,7 +276,7 @@ export async function removeWorkspace(id: string) {
     if (!ok) return;
     if (rec.kind === 'browser') await deleteBrowserRoot(id).catch(() => {});
     await setWorkspaces(store.get().workspaces.filter((w) => w.id !== id));
-    track('workspace_removed', { kind: rec.kind });
+
 }
 
 export async function rescan() {
@@ -361,7 +358,6 @@ export function toggleCollapsed(path: string) {
 export function openViewer(paths: string[], index: number) {
     if (!paths.length) return;
     store.patch({ viewer: { paths, index } });
-    track('viewer_opened');
 }
 
 export function toggleFullscreen() {
@@ -373,7 +369,6 @@ export function toggleFullscreen() {
     } catch {
         /* not allowed */
     }
-    track('view_fullscreen_toggled', { on });
 }
 
 // ---------------------------------------------------------------- meta
@@ -464,7 +459,6 @@ export async function autoTagItem(path: string, maxTags: number): Promise<void> 
         const tags = await tagWithModel(root, entry, maxTags);
         applyAutoTags({ [path]: tags });
         toast(`Generated ${tags.length} auto-tag${tags.length === 1 ? '' : 's'}`);
-        track('autotag_item_finished', { count: tags.length });
     } catch (error) {
         console.warn('[autotag] model failed', error);
         const message = error instanceof Error ? error.message : 'Could not load the selected tagging model';
@@ -518,7 +512,6 @@ export async function importFiles(folder: string, files: File[]): Promise<string
     }
     await rescan();
     toast(`Imported ${out.length} file${out.length === 1 ? '' : 's'}`);
-    track('library_files_imported', { count: out.length });
     return out;
 }
 
@@ -534,7 +527,6 @@ export async function createFolder(parent: string) {
     const dir = await getDir(root, parent, true);
     const name = await uniqueName(dir, sanitizeName(raw));
     await dir.getDirectoryHandle(name, { create: true });
-    track('library_folder_created');
     await rescan();
     navigate({ kind: 'folder', path: joinPath(parent, name) });
 }
@@ -550,7 +542,6 @@ export async function createCanvas(folder: string) {
     while ((await entryKind(dir, name + CANVAS_EXT)) || (await entryKind(dir, name + ASSETS_SUFFIX))) name = `${base} (${n++})`;
     await writeIn(dir, name + CANVAS_EXT, JSON.stringify({ version: 1, elements: [] }));
     await dir.getDirectoryHandle(name + ASSETS_SUFFIX, { create: true });
-    track('library_canvas_created');
     await rescan();
     navigate({ kind: 'canvas', path: joinPath(folder, name + CANVAS_EXT) });
 }
@@ -590,7 +581,6 @@ export async function renameEntry(path: string, type: EntryType) {
         return;
     }
     remapViews(path, newPath);
-    track('library_item_renamed', { type });
     await rescan();
 }
 
@@ -654,7 +644,6 @@ export async function trashItems(targets: { path: string; type: EntryType }[]) {
     });
     flushMeta();
     toast(added.length === 1 ? `Moved “${added[0].name}” to trash` : `Moved ${added.length} items to trash`);
-    track('library_items_trashed', { count: added.length });
     await rescan();
 }
 
@@ -691,7 +680,6 @@ export async function restoreTrash(id: string) {
         }
         setMeta({ ...store.get().meta, items, trash: store.get().meta.trash.filter((t) => t.id !== id) });
         toast(`Restored “${e.name}”`);
-        track('trash_item_restored', { kind: e.kind });
         await rescan();
     } catch (err) {
         console.warn(err);
@@ -712,7 +700,6 @@ export async function purgeTrash(id: string) {
     await purge(e);
     const m = store.get().meta;
     setMeta({ ...m, trash: m.trash.filter((t) => t.id !== id) });
-    track('trash_item_purged');
 }
 
 export async function emptyTrash() {
@@ -722,7 +709,6 @@ export async function emptyTrash() {
     for (const e of list) await purge(e);
     setMeta({ ...store.get().meta, trash: [] });
     toast('Trash emptied');
-    track('trash_emptied', { count: list.length });
 }
 
 export async function moveFiles(paths: string[], toFolder: string) {
@@ -743,7 +729,6 @@ export async function moveFiles(paths: string[], toFolder: string) {
     if (moved) {
         store.patch({ selection: [], focus: null });
         toast(`Moved ${moved} file${moved > 1 ? 's' : ''}`);
-        track('library_files_moved', { count: moved });
         await rescan();
     }
 }

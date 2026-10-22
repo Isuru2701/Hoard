@@ -58,7 +58,7 @@ export function DropImport({ folder, children }: { folder: string; children: Rea
                 if (!isFiles(e)) return;
                 e.preventDefault();
                 setOver(false);
-                track('feed_files_dropped');
+                
                 void importFiles(folder, [...e.dataTransfer.files]);
             }}
         >
@@ -86,7 +86,7 @@ function FeedHeader({ title, subtitle, actions }: { title: ReactNode; subtitle: 
                 className="input !h-8 !w-auto"
                 value={sort}
                 onChange={(e) => {
-                    track('feed_sort_changed', { sort: e.target.value });
+                    
                     store.patch({ feedSort: e.target.value as FeedSort });
                 }}
             >
@@ -100,7 +100,7 @@ function FeedHeader({ title, subtitle, actions }: { title: ReactNode; subtitle: 
                         key={s}
                         className={`h-7 w-8 rounded-md text-xs font-semibold ${size === s ? 'bg-white/15 text-white' : 'text-muted'}`}
                         onClick={() => {
-                            track('feed_size_changed', { size: s });
+                            
                             store.patch({ feedSize: s });
                         }}
                     >
@@ -232,7 +232,7 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
     const paths = useMemo(() => items.map((i) => i.path), [items]);
 
     const onSelect = (e: React.MouseEvent, path: string) => {
-        track('feed_item_selected');
+        
         const sel = store.get().selection;
         if (e.shiftKey && anchor.current) {
             const a = paths.indexOf(anchor.current);
@@ -297,11 +297,11 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
             if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || s.dialog || s.viewer || s.searchOpen) return;
             if ((e.key === 'Delete' || e.key === 'Backspace') && s.selection.length) {
                 e.preventDefault();
-                track('feed_delete_key');
+                
                 void trashItems(s.selection.map((p) => ({ path: p, type: 'file' as const })));
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
                 e.preventDefault();
-                track('feed_select_all');
+                
                 store.patch({ selection: paths, focus: null });
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && s.selection.length) {
                 e.preventDefault();
@@ -365,12 +365,12 @@ export function FolderPage({ path }: { path: string }) {
             {hasKids && (
                 <div className="flex gap-2 overflow-x-auto px-4 pb-2">
                     {node.children.map((c) => (
-                        <button key={c.path} className="btn btn-subtle shrink-0" onClick={() => { track('folder_chip_clicked'); navigate({ kind: 'folder', path: c.path }); }}>
+                        <button key={c.path} className="btn btn-subtle shrink-0" onClick={() => { navigate({ kind: 'folder', path: c.path }); }}>
                             <Icon name="folder" size={14} /> {c.name} <span className="text-xs text-muted">{c.totalCount}</span>
                         </button>
                     ))}
                     {node.canvases.map((c) => (
-                        <button key={c.path} className="btn btn-subtle shrink-0" onClick={() => { track('canvas_chip_clicked'); navigate({ kind: 'canvas', path: c.path }); }}>
+                        <button key={c.path} className="btn btn-subtle shrink-0" onClick={() => { navigate({ kind: 'canvas', path: c.path }); }}>
                             <Icon name="canvas" size={14} /> {c.name}
                         </button>
                     ))}

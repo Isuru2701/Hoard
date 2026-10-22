@@ -5,7 +5,6 @@ import { CanvasEngine, FONT, notePad } from './engine.ts';
 import { DEFAULT_ADJ, type Adjust, type El, type NoteEl } from './types.ts';
 import { IconBtn, ThumbImg } from '../ui/kit.tsx';
 import { Icon } from '../ui/Icon.tsx';
-import { track } from '../sdk/track.ts';
 
 const fmt = (v: number) => String(Math.round(v * 10) / 10);
 
@@ -15,7 +14,7 @@ function NumField({ label, value, onCommit, suffix }: { label: string; value: nu
     const commit = () => {
         const n = parseFloat(text);
         if (isFinite(n) && fmt(n) !== fmt(value)) {
-            track('canvas_panel_field_edited', { field: label });
+            
             onCommit(n);
         }
     };
@@ -79,7 +78,7 @@ export function SelectionPanel({ engine, onClose }: { engine: CanvasEngine; onCl
                             <NumField label="X" value={e.x} onCommit={(x) => upd(() => ({ x }))} />
                             <NumField label="Y" value={e.y} onCommit={(y) => upd(() => ({ y }))} />
                             <NumField label="R" value={(e.r * 180) / Math.PI} suffix="°" onCommit={(d) => upd(() => ({ r: (d * Math.PI) / 180 }))} />
-                            <button className={`btn !h-7 !px-2 ${e.locked ? 'text-accent' : ''}`} onClick={() => { track('canvas_panel_lock'); engine.toggleLock(); }}>
+                            <button className={`btn !h-7 !px-2 ${e.locked ? 'text-accent' : ''}`} onClick={() => { engine.toggleLock(); }}>
                                 <Icon name={e.locked ? 'lock' : 'unlock'} size={13} /> {e.locked ? 'Locked' : 'Lock'}
                             </button>
                         </div>
@@ -87,7 +86,7 @@ export function SelectionPanel({ engine, onClose }: { engine: CanvasEngine; onCl
                     <div className="border-t border-line px-3 py-3">
                         <div className="section-label mb-2 flex items-center justify-between">
                             Dimensions
-                            <button className={`ib !h-6 !min-w-6 ${link ? 'ib-on' : ''}`} title="Keep proportions" onClick={() => { track('canvas_panel_link_toggled'); setLink(!link); }}>
+                            <button className={`ib !h-6 !min-w-6 ${link ? 'ib-on' : ''}`} title="Keep proportions" onClick={() => { setLink(!link); }}>
                                 <Icon name="link" size={12} />
                             </button>
                         </div>
@@ -107,13 +106,13 @@ export function SelectionPanel({ engine, onClose }: { engine: CanvasEngine; onCl
                     <div className="border-t border-line px-3 py-3">
                         <div className="section-label mb-2">Flip & crop</div>
                         <div className="flex flex-wrap gap-1">
-                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { track('canvas_panel_flip_h'); engine.flip('x'); }}>
+                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { engine.flip('x'); }}>
                                 <Icon name="flipH" size={14} /> Horizontal
                             </button>
-                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { track('canvas_panel_flip_v'); engine.flip('y'); }}>
+                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { engine.flip('y'); }}>
                                 <Icon name="flipV" size={14} /> Vertical
                             </button>
-                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { track('canvas_panel_crop'); engine.startCrop(e.id); }}>
+                            <button className="btn btn-subtle !h-8 !px-2" onClick={() => { engine.startCrop(e.id); }}>
                                 <Icon name="crop" size={14} /> Crop
                             </button>
                         </div>
@@ -178,7 +177,7 @@ export function NoteEditor({ engine }: { engine: CanvasEngine }) {
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
             onBlur={() => {
-                track('canvas_note_edited');
+                
                 engine.commitNote(id, text);
             }}
             onKeyDown={(e) => {
@@ -221,7 +220,7 @@ export function LibraryDrawer({ onAdd, onClose }: { onAdd: (paths: string[]) => 
                 <IconBtn icon="x" title="Close library" ev="canvas_library_closed" onClick={onClose} />
             </div>
             <div className="space-y-2 px-3 pb-2">
-                <select className="input !h-8" value={folder} onChange={(e) => { track('canvas_library_folder_changed'); setFolder(e.target.value); }}>
+                <select className="input !h-8" value={folder} onChange={(e) => { setFolder(e.target.value); }}>
                     <option value="__all">All folders</option>
                     {scan?.folders.map((f) => (
                         <option key={f.path} value={f.path}>
@@ -241,7 +240,7 @@ export function LibraryDrawer({ onAdd, onClose }: { onAdd: (paths: string[]) => 
                             e.dataTransfer.effectAllowed = 'copy';
                         }}
                         onClick={() => {
-                            track('canvas_library_item_added');
+                            
                             onAdd([f.path]);
                         }}
                         className="aspect-square overflow-hidden rounded-md bg-white/5"

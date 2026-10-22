@@ -1,6 +1,5 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 import { useStore } from '../state/store.ts';
 import { getRoot } from '../state/actions.ts';
 import { getThumbUrl, type MediaRef } from '../lib/thumbs.ts';
@@ -27,7 +26,7 @@ export function IconBtn(props: {
             disabled={disabled}
             className={`ib ${active ? 'ib-on' : ''} ${danger ? 'ib-danger' : ''} ${className}`}
             onClick={(e) => {
-                track(ev);
+                
                 onClick?.(e);
             }}
         >
@@ -55,7 +54,7 @@ export function Btn(props: {
             disabled={disabled}
             className={`btn btn-${variant} ${className}`}
             onClick={(e) => {
-                track(ev);
+                
                 onClick?.(e);
             }}
         >

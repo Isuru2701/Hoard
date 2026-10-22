@@ -71,7 +71,7 @@ export default function Home() {
                     <button
                         className="mt-6 flex h-11 w-full max-w-md items-center gap-3 rounded-xl border border-line bg-white/[0.03] px-4 text-sm text-muted hover:bg-white/[0.05]"
                         onClick={() => {
-                            track('home_search_clicked');
+                            
                             store.patch({ searchOpen: true });
                         }}
                     >
@@ -81,12 +81,12 @@ export default function Home() {
                     </button>
 
                     <div className="mt-7 grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                        <Stat icon="images" n={stats.images} label="Images" onClick={() => { track('home_stat_images'); navigate({ kind: 'all' }); }} />
-                        <Stat icon="video" n={stats.videos} label="Videos" onClick={() => { track('home_stat_videos'); navigate({ kind: 'all' }); }} />
+                        <Stat icon="images" n={stats.images} label="Images" onClick={() => { navigate({ kind: 'all' }); }} />
+                        <Stat icon="video" n={stats.videos} label="Videos" onClick={() => { navigate({ kind: 'all' }); }} />
                         <Stat icon="file" n={stats.files} label="Other files" />
                         <Stat icon="folder" n={scan.folders.length} label="Folders" />
                         <Stat icon="canvas" n={scan.canvases.length} label="Canvases" />
-                        <Stat icon="tag" n={stats.tags} label="Tags" onClick={() => { track('home_stat_tags'); navigate({ kind: 'tags' }); }} />
+                        <Stat icon="tag" n={stats.tags} label="Tags" onClick={() => { navigate({ kind: 'tags' }); }} />
                     </div>
 
                     {recents.length > 0 && (
@@ -99,7 +99,7 @@ export default function Home() {
                                         <button
                                             key={r.path}
                                             className="overflow-hidden rounded-xl border border-line bg-white/[0.02] text-left hover:bg-white/[0.05]"
-                                            onClick={() => { track('home_recent_opened', { kind: r.kind }); navigate({ kind: r.kind, path: r.path }); }}
+                                            onClick={() => { navigate({ kind: r.kind, path: r.path }); }}
                                         >
                                             <div className="grid aspect-square grid-cols-2 gap-0.5 bg-black/30 p-1">
                                                 {imgs.length ? (

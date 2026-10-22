@@ -4,7 +4,6 @@ import { createWorkspace, deleteProfileAction, menuAt, openWorkspace, removeWork
 import { WS_COLORS, type Profile, type WorkspaceRecord } from '../lib/workspaces.ts';
 import { Btn, IconBtn, SectionLabel } from './kit.tsx';
 import { Icon } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 import { isTauri, revealNativePath } from '../lib/tauriFs.ts';
 
 function ProfileForm({ initial, createNew = false, onDone }: { initial: Profile | null; createNew?: boolean; onDone: () => void }) {
@@ -35,7 +34,7 @@ function NewWorkspaceModal({ onClose }: { onClose: () => void }) {
     const [busy, setBusy] = useState(false);
     const submit = async () => {
         if (!name.trim() || busy) return;
-        track('workspace_create_submitted', { kind });
+        
         setBusy(true);
         setError(null);
         const err = await createWorkspace(name.trim(), kind, color);
@@ -47,7 +46,7 @@ function NewWorkspaceModal({ onClose }: { onClose: () => void }) {
         <button
             disabled={disabled}
             onClick={() => {
-                track('workspace_storage_selected', { kind: k });
+                
                 setKind(k);
                 setError(null);
             }}
@@ -94,7 +93,7 @@ function NewWorkspaceModal({ onClose }: { onClose: () => void }) {
 function WorkspaceCard({ ws }: { ws: WorkspaceRecord }) {
     const [busy, setBusy] = useState(false);
     const open = async () => {
-        track('workspace_card_opened');
+        
         setBusy(true);
         await openWorkspace(ws.id);
         setBusy(false);

@@ -19,7 +19,6 @@ import { DRAG_MIME, dirname } from '../lib/fs.ts';
 import type { CanvasEntry, FolderNode } from '../lib/scan.ts';
 import { Btn, IconBtn } from './kit.tsx';
 import { Icon, type IconName } from './Icon.tsx';
-import { track } from '../sdk/track.ts';
 
 export function useFolderDrop(path: string) {
     const [over, setOver] = useState(false);
@@ -41,10 +40,10 @@ export function useFolderDrop(path: string) {
                 setOver(false);
                 const raw = e.dataTransfer.getData(DRAG_MIME);
                 if (raw) {
-                    track('sidebar_files_dropped_move');
+                    
                     void moveFiles(JSON.parse(raw) as string[], path);
                 } else if (e.dataTransfer.files.length) {
-                    track('sidebar_files_dropped_import');
+                    
                     void importFiles(path, [...e.dataTransfer.files]);
                 }
             },
@@ -58,7 +57,7 @@ function NavItem({ icon, label, view, count, onClick, ev }: { icon: IconName; la
         <button
             className={`nav-item ${active ? 'on' : ''}`}
             onClick={(e) => {
-                track(ev);
+                
                 if (onClick) onClick(e);
                 else if (view) navigate(view);
             }}
@@ -95,7 +94,7 @@ function CanvasRow({ c, depth }: { c: CanvasEntry; depth: number }) {
             className={`tree-row ${active ? 'on' : ''}`}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => {
-                track('sidebar_canvas_opened');
+                
                 navigate({ kind: 'canvas', path: c.path });
             }}
             onContextMenu={(e) => menuAt(e, canvasMenu(c))}
@@ -121,7 +120,7 @@ function FolderRow({ node, depth }: { node: FolderNode; depth: number }) {
                 className={`tree-row ${active ? 'on' : ''} ${drop.over ? 'drop' : ''}`}
                 style={{ paddingLeft: 8 + depth * 14 }}
                 onClick={() => {
-                    track('sidebar_folder_opened');
+                    
                     navigate({ kind: 'folder', path: node.path });
                 }}
                 onContextMenu={(e) => menuAt(e, folderMenu(node))}
@@ -132,7 +131,7 @@ function FolderRow({ node, depth }: { node: FolderNode; depth: number }) {
                     aria-label="Expand"
                     onClick={(e) => {
                         e.stopPropagation();
-                        track('sidebar_folder_toggled');
+                        
                         toggleCollapsed(node.path);
                     }}
                 >
@@ -181,7 +180,7 @@ export default function Sidebar({ overlay }: { overlay: boolean }) {
                     className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-white/5"
                     title="Switch workspace"
                     onClick={() => {
-                        track('workspace_switch_clicked');
+                        
                         closeWorkspace();
                     }}
                 >
