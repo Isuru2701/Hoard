@@ -270,7 +270,9 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
             const h = Math.min(Math.max(colW * ar, 50), colW * 3);
             let c = 0;
             for (let i = 1; i < cols; i++) if (heights[i] < heights[c]) c = i;
-            const p = { x: pad + c * (colW + gap), y: pad + heights[c], w: colW, h };
+            // integer-pixel geometry: fractional positions re-raster with different subpixel
+            // antialiasing per repaint and visibly vibrate at DPR 1 (browser zoom 100%)
+            const p = { x: Math.round(pad + c * (colW + gap)), y: Math.round(pad + heights[c]), w: Math.round(colW), h: Math.round(h) };
             heights[c] += h + gap;
             return p;
         });

@@ -1246,7 +1246,9 @@ export class CanvasEngine {
             dy *= this.vh || 1;
         }
         if (ev.ctrlKey || ev.metaKey) {
-            const factor = clamp(Math.exp(-dy * 0.0025), 0.92, 1.08);
+            // pinch deltas are small and arrive at high frequency, so a steeper curve
+            // speeds up trackpad pinch while mouse-wheel notches stay clamp-limited
+            const factor = clamp(Math.exp(-dy * 0.006), 0.92, 1.08);
             this.zoomAt(s.x, s.y, factor);
         } else {
             if (ev.shiftKey && !dx) {

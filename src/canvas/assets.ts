@@ -33,8 +33,8 @@ export async function bitmapFromFile(file: File): Promise<ImageBitmap | null> {
  *  (paste picks a fresh name on collision), so path keys stay valid. */
 const sharedThumbs = new Map<string, ImageBitmap>();
 const sharedFulls = new Map<string, ImageBitmap>();
-const SHARED_THUMB_CAP = 120;
-const SHARED_FULL_CAP = 12;
+const SHARED_THUMB_CAP = 256;
+const SHARED_FULL_CAP = 48;
 
 function sharedKey(wsId: string, assetsPath: string, asset: string): string {
     return `${wsId}\u0000${assetsPath}\u0000${asset}`;
@@ -74,14 +74,16 @@ export class AssetImages implements ImageProvider {
 
     get(asset: string, px: number): ImageBitmap | null {
         const key = this.key(asset);
+        const f = lruGet(sharedFulls, key);
         if (px > 640 && kindOf(asset) !== 'video') {
-            const f = lruGet(sharedFulls, key);
             if (f) return f;
             this.requestFull(asset);
         }
         const t = lruGet(sharedThumbs, key);
         if (t) return t;
-        // negative cache: remember decode failures so we don't requeue forever
+        // zoomed out but the thumb is still decoding: keep rendering the full res
+        // instead of a gray placeholder (avoids flicker when crossing the px threshold)
+        if (f) return f;
         if (!this.failedThumbs.has(asset)) this.requestThumb(asset);
         return null;
     }
@@ -142,6 +144,8 @@ export class AssetImages implements ImageProvider {
             this.loadingFull.delete(asset);
             if (!bmp || this.dead) return;
             lruPut(sharedFulls, this.key(asset), bmp, SHARED_FULL_CAP);
+            // prefetch the thumb right after so zooming out never has to wait on a decode
+            this.requestThumb(asset);
             this.onLoad();
         });
     }
