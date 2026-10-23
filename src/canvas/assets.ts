@@ -28,10 +28,39 @@ export async function bitmapFromFile(file: File): Promise<ImageBitmap | null> {
     }
 }
 
+/** Shared decoded-bitmap caches: survive closing/switching canvases within a session.
+ *  Keys are (workspace | assets folder | asset file); asset filenames are never reused
+ *  (paste picks a fresh name on collision), so path keys stay valid. */
+const sharedThumbs = new Map<string, ImageBitmap>();
+const sharedFulls = new Map<string, ImageBitmap>();
+const SHARED_THUMB_CAP = 120;
+const SHARED_FULL_CAP = 12;
+
+function sharedKey(wsId: string, assetsPath: string, asset: string): string {
+    return `${wsId}\u0000${assetsPath}\u0000${asset}`;
+}
+
+function lruGet(map: Map<string, ImageBitmap>, key: string): ImageBitmap | undefined {
+    const v = map.get(key);
+    if (v === undefined) return undefined;
+    map.delete(key);
+    map.set(key, v); // reinsert => most recently used
+    return v;
+}
+
+function lruPut(map: Map<string, ImageBitmap>, key: string, bmp: ImageBitmap, cap: number) {
+    map.delete(key);
+    map.set(key, bmp);
+    while (map.size > cap) {
+        const [k, v] = map.entries().next().value as [string, ImageBitmap];
+        map.delete(k);
+        v.close(); // evicted bitmaps are gone; they load again on demand
+    }
+}
+
 export class AssetImages implements ImageProvider {
-    private thumbs = new Map<string, ImageBitmap | null>();
+    private failedThumbs = new Set<string>();
     private loadingThumbs = new Set<string>();
-    private fulls = new Map<string, ImageBitmap>();
     private loadingFull = new Set<string>();
     private queue: (() => Promise<void>)[] = [];
     private active = 0;
@@ -39,27 +68,30 @@ export class AssetImages implements ImageProvider {
 
     constructor(private wsId: string, private root: Dir, private assetsPath: string, private onLoad: () => void) {}
 
+    private key(asset: string): string {
+        return sharedKey(this.wsId, this.assetsPath, asset);
+    }
+
     get(asset: string, px: number): ImageBitmap | null {
+        const key = this.key(asset);
         if (px > 640 && kindOf(asset) !== 'video') {
-            const f = this.fulls.get(asset);
-            if (f) {
-                this.fulls.delete(asset);
-                this.fulls.set(asset, f);
-                return f;
-            }
+            const f = lruGet(sharedFulls, key);
+            if (f) return f;
             this.requestFull(asset);
         }
-        const t = this.thumbs.get(asset);
-        if (t !== undefined) return t;
-        this.requestThumb(asset);
+        const t = lruGet(sharedThumbs, key);
+        if (t) return t;
+        // negative cache: remember decode failures so we don't requeue forever
+        if (!this.failedThumbs.has(asset)) this.requestThumb(asset);
         return null;
     }
 
     async full(asset: string): Promise<ImageBitmap | null> {
-        const f = this.fulls.get(asset);
+        const key = this.key(asset);
+        const f = lruGet(sharedFulls, key);
         if (f) return f;
         try {
-            if (kindOf(asset) === 'video') return this.thumbs.get(asset) ?? null;
+            if (kindOf(asset) === 'video') return lruGet(sharedThumbs, key) ?? null;
             return await bitmapFromFile(await getFile(this.root, joinPath(this.assetsPath, asset)));
         } catch {
             return null;
@@ -90,10 +122,13 @@ export class AssetImages implements ImageProvider {
                 const path = joinPath(this.assetsPath, asset);
                 const file = await getFile(this.root, path);
                 const rec = await getThumb(this.wsId, this.root, { path, size: file.size, modified: file.lastModified, kind: kindOf(asset) === 'video' ? 'video' : 'image' });
-                this.thumbs.set(asset, rec ? await createImageBitmap(rec.blob) : null);
+                const bmp = rec ? await createImageBitmap(rec.blob) : null;
+                if (bmp) lruPut(sharedThumbs, this.key(asset), bmp, SHARED_THUMB_CAP);
+                else this.failedThumbs.add(asset);
             } catch {
-                this.thumbs.set(asset, null);
+                this.failedThumbs.add(asset);
             }
+            this.loadingThumbs.delete(asset);
             if (!this.dead) this.onLoad();
         });
     }
@@ -106,22 +141,18 @@ export class AssetImages implements ImageProvider {
             const bmp = await this.full(asset);
             this.loadingFull.delete(asset);
             if (!bmp || this.dead) return;
-            this.fulls.set(asset, bmp);
-            while (this.fulls.size > 30) {
-                const [k, v] = this.fulls.entries().next().value as [string, ImageBitmap];
-                this.fulls.delete(k);
-                v.close();
-            }
+            lruPut(sharedFulls, this.key(asset), bmp, SHARED_FULL_CAP);
             this.onLoad();
         });
     }
 
     destroy() {
         this.dead = true;
-        for (const b of this.fulls.values()) b.close();
-        for (const b of this.thumbs.values()) b?.close();
-        this.fulls.clear();
-        this.thumbs.clear();
+        this.loadingThumbs.clear();
+        this.loadingFull.clear();
+        this.failedThumbs.clear();
+        this.queue.length = 0;
+        // shared bitmaps stay alive for the next canvas that uses them
     }
 }
 

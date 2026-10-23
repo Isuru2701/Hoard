@@ -1,11 +1,12 @@
 import type React from 'react';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react';
 import { store, useStore, type FeedSort } from '../../state/store.ts';
-import { addPathsToCanvas, createCanvas, createFolder, createMarkdown, getRoot, importFiles, importInto, menuAt, navigate, openMenu, openViewer, toast, trashItems, updateItemMeta } from '../../state/actions.ts';
-import { DRAG_MIME } from '../../lib/fs.ts';
+import { addPathsToCanvas, copyItems, createCanvas, createFolder, createMarkdown, currentFeedFolder, getRoot, importFiles, importInto, menuAt, navigate, openMenu, openViewer, pasteItems, toast, trashItems, updateItemMeta } from '../../state/actions.ts';
+import { DRAG_MIME, getFile } from '../../lib/fs.ts';
 import { findFolder, type FileEntry } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
 import { getDims, getDimsVersion, getThumbUrl, subscribeDims } from '../../lib/thumbs.ts';
+import { bitmapFromFile } from '../../canvas/assets.ts';
 import { Btn, Empty, IconBtn } from '../kit.tsx';
 import { Icon } from '../Icon.tsx';
 import { isTauri, nativeFile } from '../../lib/tauriFs.ts';
@@ -69,6 +70,47 @@ export function DropImport({ folder, children }: { folder: string; children: Rea
             )}
         </div>
     );
+}
+
+/** Converts an image file to PNG so it can sit on the system clipboard for other apps. */
+function imageFileToPng(file: File): Promise<Blob> {
+    if (file.type === 'image/png') return Promise.resolve(file);
+    return bitmapFromFile(file).then((bmp) => {
+        if (!bmp) throw new Error('decode failed');
+        const c = document.createElement('canvas');
+        c.width = bmp.width;
+        c.height = bmp.height;
+        c.getContext('2d')!.drawImage(bmp, 0, 0);
+        bmp.close();
+        return new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('png encode failed'))), 'image/png'));
+    });
+}
+
+/** Ctrl+C pastes both ways: the internal folder clipboard (Ctrl+V here) and, for a single
+ *  image, the image bytes themselves so other applications can paste it. */
+async function copySelectionToClipboard(paths: string[]): Promise<void> {
+    const text = `hoard:library-paths:${JSON.stringify(paths)}`;
+    const root = getRoot();
+    if (root && paths.length === 1) {
+        const entry = store.get().scan?.files.find((f) => f.path === paths[0]);
+        if (entry?.kind === 'image') {
+            try {
+                // single write holding both flavors: other apps read the PNG, Hoard reads the paths
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        'text/plain': new Blob([text], { type: 'text/plain' }),
+                        'image/png': imageFileToPng(await getFile(root, paths[0])),
+                    }),
+                ]);
+                toast('Image copied — paste it here (Ctrl+V) or in another app');
+                return;
+            } catch (err) {
+                console.warn('[copy] image clipboard failed', err);
+            }
+        }
+    }
+    navigator.clipboard?.writeText(text).catch(() => {});
+    toast(`${paths.length} item${paths.length === 1 ? '' : 's'} copied — browse to a folder and press Ctrl+V to paste`);
 }
 
 function FeedHeader({ title, subtitle, actions }: { title: ReactNode; subtitle: string; actions?: ReactNode }) {
@@ -319,8 +361,8 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
                 store.patch({ selection: paths, focus: null });
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && s.selection.length) {
                 e.preventDefault();
-                navigator.clipboard?.writeText(`hoard:library-paths:${JSON.stringify(s.selection)}`).catch(() => {});
-                toast(`${s.selection.length} item${s.selection.length === 1 ? '' : 's'} copied`);
+                copyItems(s.selection);
+                void copySelectionToClipboard(s.selection);
             } else if (e.key === 'Escape') store.patch({ selection: [], focus: null });
             else if (e.key === ' ' && s.focus) {
                 e.preventDefault();
@@ -332,8 +374,25 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
                 }
             }
         };
+        // native paste event (not the keydown) so external OS-clipboard files flow through
+        const onPaste = (ev: ClipboardEvent) => {
+            const t = ev.target as HTMLElement;
+            const s = store.get();
+            if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || s.dialog || s.viewer || s.searchOpen) return;
+            const files = ev.clipboardData ? [...ev.clipboardData.files] : [];
+            if (files.length) {
+                ev.preventDefault();
+                void importFiles(currentFeedFolder(), files);
+            } else {
+                void pasteItems();
+            }
+        };
         window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
+        window.addEventListener('paste', onPaste);
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            window.removeEventListener('paste', onPaste);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paths]);
 

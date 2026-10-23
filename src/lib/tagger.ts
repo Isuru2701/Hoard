@@ -342,7 +342,8 @@ export async function loadTaggerModel(onProgress?: (value: number) => void): Pro
     }
     classifier = await loading;
     loadedId = modelId;
-    void idbSet('kv', READY_KEY, modelId);
+    // per-model downloaded marker (the global READY_KEY is legacy, kept for older installs)
+    await Promise.all([idbSet('kv', `${READY_KEY}:${model.id}`, model.id), idbSet('kv', READY_KEY, modelId)]);
 }
 
 export function cancelTaggerDownloads(): void {
@@ -351,9 +352,9 @@ export function cancelTaggerDownloads(): void {
 
 export async function taggerModelDownloaded(): Promise<boolean> {
     const model = activeTaggerModel();
-    return model.custom
-        ? (await idbGet<string>('kv', `${READY_KEY}:${model.id}`)) === model.id
-        : (await idbGet<string>('kv', READY_KEY)) === modelSource(model.model);
+    if ((await idbGet<string>('kv', `${READY_KEY}:${model.id}`)) === model.id) return true;
+    // legacy fallback: older builds stored the last-loaded model in a single global key
+    return (await idbGet<string>('kv', READY_KEY)) === modelSource(model.model);
 }
 
 export async function assertTaggerModelReady(): Promise<void> {

@@ -10,6 +10,7 @@ import {
     entryKind,
     extOf,
     getDir,
+    getFile,
     isImportableFile,
     joinPath,
     kindOf,
@@ -771,6 +772,49 @@ export async function moveFiles(paths: string[], toFolder: string) {
         store.patch({ selection: [], focus: null });
         toast(`Moved ${moved} file${moved > 1 ? 's' : ''}`);
         await rescan();
+    }
+}
+
+// ---------------------------------------------------------------- copy/paste in folders
+/** Folder copy-paste: Ctrl+C stores selected paths here, Ctrl+V clones them into the open folder. */
+let fileClipboard: string[] = [];
+
+export function copyItems(paths: string[]): void {
+    fileClipboard = [...paths];
+}
+
+/** The folder shown in the central panel (folder page, or a canvas's parent folder). */
+export function currentFeedFolder(): string {
+    const view = store.get().view;
+    return view.kind === 'folder' ? view.path : view.kind === 'canvas' ? dirname(view.path) : '';
+}
+
+export async function pasteItems(): Promise<void> {
+    if (!root) return;
+    if (!fileClipboard.length) {
+        toast('Clipboard is empty — select files and press Ctrl+C first');
+        return;
+    }
+    const folder = currentFeedFolder();
+    let copied = 0;
+    for (const p of fileClipboard) {
+        if (dirname(p) === folder) continue;
+        try {
+            const file = await getFile(root, p);
+            const dir = await getDir(root, folder, true);
+            const name = await uniqueName(dir, basename(p));
+            await writeIn(dir, name, file);
+            copied++;
+        } catch (e) {
+            console.warn('[paste] failed', p, e);
+        }
+    }
+    if (copied) {
+        toast(`Pasted ${copied} file${copied > 1 ? 's' : ''}`);
+        store.patch({ selection: [], focus: null });
+        await rescan();
+    } else {
+        toast('These files are already in this folder');
     }
 }
 
