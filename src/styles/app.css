@@ -449,6 +449,15 @@ textarea.input {
     fill: var(--color-fg);
 }
 
+/* caret + drag-drop cursor: white instead of faint gray */
+.doc-host .milkdown .ProseMirror-focused {
+    --prosemirror-virtual-cursor-color: var(--color-fg);
+}
+.doc-host .milkdown .crepe-drop-cursor {
+    background-color: var(--color-fg);
+    opacity: 0.7;
+}
+
 @media (pointer: coarse) {
     .ib {
         min-width: 40px;
