@@ -416,6 +416,39 @@ textarea.input {
     max-width: 100%;
 }
 
+/* text-selection toolbar: white icons on the app background (outline gray is unreadable) */
+.doc-host .milkdown .milkdown-toolbar {
+    background: var(--color-bg);
+}
+.doc-host .milkdown .milkdown-toolbar .toolbar-item svg {
+    color: var(--color-fg);
+    fill: var(--color-fg);
+}
+
+/* table grid lines: crisp white instead of crepe's faint gray mix */
+.doc-host .milkdown .milkdown-table-block th,
+.doc-host .milkdown .milkdown-table-block td {
+    border: 1px solid var(--color-fg);
+}
+
+/* table popups (row/col drag handle, add row/col buttons): app bg + white icons */
+.doc-host .milkdown .milkdown-table-block svg {
+    fill: var(--color-fg);
+}
+.doc-host .milkdown .milkdown-table-block .cell-handle,
+.doc-host .milkdown .milkdown-table-block .cell-handle .button-group,
+.doc-host .milkdown .milkdown-table-block .line-handle .add-button {
+    background-color: var(--color-bg);
+}
+
+/* todo checkbox icons: white instead of faint gray */
+.doc-host .milkdown .milkdown-list-item-block li .label-wrapper {
+    color: var(--color-fg);
+}
+.doc-host .milkdown .milkdown-list-item-block li .label-wrapper svg {
+    fill: var(--color-fg);
+}
+
 @media (pointer: coarse) {
     .ib {
         min-width: 40px;

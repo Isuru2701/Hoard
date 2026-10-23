@@ -368,6 +368,15 @@ export default function CanvasView({ path }: { path: string }) {
                 void exportPng(engine, 'clipboard');
                 return;
             }
+            // Ctrl+C on a selected image copies the image itself to the clipboard.
+            if (mod && k === 'c' && !e.shiftKey) {
+                const sel = engine.selectedEls();
+                if (sel.length === 1 && sel[0].type === 'image') {
+                    e.preventDefault();
+                    void exportPng(engine, 'clipboard');
+                    return;
+                }
+            }
             if (mod && (k === 'c' || k === 'x') && engine.selected.size) navigator.clipboard?.writeText(CLIP_MARKER).catch(() => {});
             if (k === 'f' && e.shiftKey && !mod) {
                 e.preventDefault();
@@ -466,7 +475,7 @@ export default function CanvasView({ path }: { path: string }) {
                     <div className="floating absolute left-1/2 top-3 z-10 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl p-1">
                         <IconBtn
                             icon="lock"
-                            title="Tool lock — keeps the current tool active after use (off: tools switch back to select)"
+                            title="Tool lock — keeps the current tool active after use (off: tools switch back to select). Hotkey: Q"
                             ev="canvas_tool_lock_toggled"
                             active={engine.toolLock}
                             onClick={() => engine.toggleToolLock()}

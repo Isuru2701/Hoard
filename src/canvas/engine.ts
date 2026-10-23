@@ -1330,6 +1330,7 @@ export class CanvasEngine {
             this.onAction('eyedropper');
             return true;
         }
+        if (k === 'q') return this.toggleToolLock(), true;
         const map: Record<string, Tool> = { v: 'select', '1': 'select', h: 'hand', n: 'note', t: 'text', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', p: 'draw', d: 'draw', e: 'eraser' };
         const t = map[k];
         if (t) {
