@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { store, useStore } from '../../state/store.ts';
-import { createMenuItems, createMarkdown, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
+import { createMenuItems, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
 import { basename } from '../../lib/fs.ts';
 import { findFolder } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
@@ -56,10 +56,7 @@ export default function Home() {
                         icon="plus"
                         onClick={(e) => {
                             const r = e.currentTarget.getBoundingClientRect();
-                            openMenu(r.left, r.bottom + 4, [
-                                ...createMenuItems(''),
-                                { label: 'New markdown', icon: 'markdown', ev: 'create_menu_markdown', onClick: () => void createMarkdown('Inbox') },
-                            ]);
+                            openMenu(r.left, r.bottom + 4, createMenuItems(''));
                         }}
                     >
                         Create

@@ -558,7 +558,10 @@ export async function importFiles(folder: string, files: File[]): Promise<string
 }
 
 export async function importInto(folder: string) {
-    const files = await pickFiles();
+    // Unfiltered dialog: type restrictions live in importFiles (markdown included),
+    // since Windows pickers often fail to apply compound accept lists to the
+    // initial filter and hide .md files entirely.
+    const files = await pickFiles('*/*');
     if (files.length) await importFiles(folder, files);
 }
 
@@ -837,6 +840,6 @@ export function createMenuItems(folder: string): MenuItem[] {
         { label: folder ? 'New subfolder' : 'New folder', icon: 'folderPlus', ev: 'create_menu_folder', onClick: () => void createFolder(folder) },
         { label: 'New canvas', icon: 'canvas', ev: 'create_menu_canvas', onClick: () => void createCanvas(folder) },
         { label: 'New markdown', icon: 'markdown', ev: 'create_menu_markdown', onClick: () => void createMarkdown(folder) },
-        { label: 'Import images & videos', icon: 'upload', ev: 'create_menu_import', onClick: () => void importInto(folder || 'Inbox') },
+        { label: 'Import images, videos & markdown', icon: 'upload', ev: 'create_menu_import', onClick: () => void importInto(folder || 'Inbox') },
     ];
 }

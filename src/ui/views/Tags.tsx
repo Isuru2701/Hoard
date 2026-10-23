@@ -355,7 +355,7 @@ export function TagManager() {
             ) : (
                 <>
                     <div className="order-first relative mx-4 h-[379px] min-h-[379px] min-w-[379px] w-[calc(100%-2rem)] flex-none overflow-hidden rounded-xl border border-line bg-bg">
-                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel} onClick={() => {
+                        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} data-zoomable-graph className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" role="img" aria-label="Tag relationship graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel} onClick={() => {
                             if (suppressNodeClick.current) {
                                 suppressNodeClick.current = false;
                                 return;

@@ -23,6 +23,23 @@ async function boot() {
 
     await bootRegistry();
     window.addEventListener('pagehide', () => flushMeta());
+    // Trackpad pinch arrives as ctrl+wheel, and the stock reaction is to zoom the
+    // whole page. Suppress it everywhere except surfaces that zoom themselves:
+    // canvases (the engine owns wheel input) and [data-zoomable-graph] surfaces
+    // (React zooms the graph; native page zoom is cancelled here). Deliberate
+    // ctrl+mousewheel keeps working: wheel-notched deltas are large, pinches are
+    // bursts of small deltas.
+    let pinchWindow = 0;
+    const onGestureWheel = (ev: WheelEvent) => {
+        if (!ev.ctrlKey && !ev.metaKey) return;
+        const t = ev.target instanceof Element ? ev.target : null;
+        if (t?.closest('canvas')) return;
+        if (t?.closest('[data-zoomable-graph]')) return void ev.preventDefault();
+        const now = performance.now();
+        if (Math.abs(ev.deltaY) < 40) pinchWindow = now + 260;
+        if (now < pinchWindow) ev.preventDefault();
+    };
+    document.addEventListener('wheel', onGestureWheel, { capture: true, passive: false });
     document.addEventListener('fullscreenchange', () => {
         if (!document.fullscreenElement && store.get().fullscreen) store.patch({ fullscreen: false });
     });
