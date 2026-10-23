@@ -454,6 +454,7 @@ export default function CanvasView({ path }: { path: string }) {
     const sel = engine?.selectedEls() ?? [];
     const zoom = engine ? Math.round(engine.cam.z * 100) : 100;
     const single = sel.length === 1 ? sel[0] : null;
+    const grouped = engine?.selectionGrouped ?? false;
 
     return (
         <div
@@ -531,6 +532,14 @@ export default function CanvasView({ path }: { path: string }) {
                                 {sel.length > 1 && <IconBtn icon="alignLeft" title="Arrange horizontally" ev="canvas_arrange_horizontal_clicked" onClick={() => engine.arrange('horizontal')} />}
                                 {sel.length > 1 && <IconBtn icon="alignTop" title="Arrange vertically" ev="canvas_arrange_vertical_clicked" onClick={() => engine.arrange('vertical')} />}
                                 {sel.length > 1 && <IconBtn icon="maximize" title="Resize to same size" ev="canvas_match_size_clicked" onClick={() => engine.matchSize()} />}
+                                {(sel.length > 1 || grouped) && (
+                                    <IconBtn
+                                        icon={grouped ? 'ungroup' : 'group'}
+                                        title={grouped ? 'Ungroup — dissolves every selected group (Shift+G)' : 'Group selection (G)'}
+                                        ev={grouped ? 'canvas_ungroup_clicked' : 'canvas_group_clicked'}
+                                        onClick={() => (grouped ? engine.ungroupSelection() : engine.groupSelection())}
+                                    />
+                                )}
                                 <IconBtn icon="download" title="Export selection as PNG (Ctrl+Shift+C copies)" ev="canvas_export_clicked" onClick={() => void exportPng(engine, 'download')} />
                                 <IconBtn icon="sliders" title="Selection panel" ev="canvas_panel_toggled" active={panel} onClick={() => setPanel(!panel)} />
                                 <IconBtn icon="trash" title="Delete" ev="canvas_delete_clicked" danger onClick={() => engine.deleteSelected()} />
@@ -561,6 +570,11 @@ function openCanvasMenu(eng: CanvasEngine, x: number, y: number, onEl: boolean) 
         openMenu(x, y, [
             { label: 'Copy', icon: 'copy', ev: 'canvas_menu_copy', onClick: () => { eng.copy(); navigator.clipboard?.writeText(CLIP_MARKER).catch(() => {}); } },
             { label: 'Duplicate', icon: 'copy', ev: 'canvas_menu_duplicate', onClick: () => eng.duplicate() },
+            ...(sel.length > 1 || sel.some((e) => e.group)
+                ? [sel.some((e) => e.group)
+                    ? { label: 'Ungroup', icon: 'ungroup' as const, ev: 'canvas_menu_ungroup', onClick: () => eng.ungroupSelection() }
+                    : { label: `Group ${sel.length} items`, icon: 'group' as const, ev: 'canvas_menu_group', onClick: () => eng.groupSelection() }]
+                : []),
             { label: 'Bring to front', icon: 'up', ev: 'canvas_menu_front', onClick: () => eng.toFront() },
             { label: 'Send to back', icon: 'down', ev: 'canvas_menu_back', onClick: () => eng.toBack() },
             ...(single?.type === 'image' ? [{ label: 'Crop', icon: 'crop' as const, ev: 'canvas_menu_crop', onClick: () => eng.startCrop(single.id) }] : []),

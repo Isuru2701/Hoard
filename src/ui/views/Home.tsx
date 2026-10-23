@@ -58,7 +58,7 @@ export default function Home() {
                             const r = e.currentTarget.getBoundingClientRect();
                             openMenu(r.left, r.bottom + 4, [
                                 ...createMenuItems(''),
-                                { label: 'New markdown', icon: 'file', ev: 'create_menu_markdown', onClick: () => void createMarkdown('Inbox') },
+                                { label: 'New markdown', icon: 'markdown', ev: 'create_menu_markdown', onClick: () => void createMarkdown('Inbox') },
                             ]);
                         }}
                     >
@@ -143,7 +143,7 @@ export default function Home() {
                                 >
                                     {f.kind === 'markdown' ? (
                                         <div className="grid h-full w-full place-items-center text-muted">
-                                            <Icon name="file" size={20} />
+                                            <Icon name="markdown" size={20} />
                                         </div>
                                     ) : (
                                         <ThumbImg entry={f} className="h-full w-full" />

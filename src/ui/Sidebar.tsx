@@ -74,7 +74,7 @@ function folderMenu(node: FolderNode) {
     return [
         { label: 'New subfolder', icon: 'folderPlus' as const, ev: 'folder_menu_subfolder', onClick: () => void createFolder(node.path) },
         { label: 'New canvas here', icon: 'canvas' as const, ev: 'folder_menu_canvas', onClick: () => void createCanvas(node.path) },
-        { label: 'New markdown here', icon: 'file' as const, ev: 'folder_menu_markdown', onClick: () => void createMarkdown(node.path) },
+        { label: 'New markdown here', icon: 'markdown' as const, ev: 'folder_menu_markdown', onClick: () => void createMarkdown(node.path) },
         { label: 'Import here', icon: 'upload' as const, ev: 'folder_menu_import', onClick: () => void importInto(node.path) },
         { label: 'Rename', icon: 'edit' as const, ev: 'folder_menu_rename', onClick: () => void renameEntry(node.path, 'folder') },
         { label: 'Move to trash', icon: 'trash' as const, danger: true, ev: 'folder_menu_trash', onClick: () => void trashItems([{ path: node.path, type: 'folder' }]) },
@@ -113,7 +113,7 @@ function CanvasRow({ c, depth }: { c: CanvasEntry; depth: number }) {
 
 function docMenu(d: DocEntry) {
     return [
-        { label: 'Open', icon: 'file' as const, ev: 'doc_menu_open', onClick: () => navigate({ kind: 'doc', path: d.path }) },
+        { label: 'Open', icon: 'markdown' as const, ev: 'doc_menu_open', onClick: () => navigate({ kind: 'doc', path: d.path }) },
         { label: 'Rename', icon: 'edit' as const, ev: 'doc_menu_rename', onClick: () => void renameEntry(d.path, 'file') },
         { label: 'Move to trash', icon: 'trash' as const, danger: true, ev: 'doc_menu_trash', onClick: () => void trashItems([{ path: d.path, type: 'file' }]) },
     ];
@@ -129,7 +129,7 @@ function DocRow({ d, depth }: { d: DocEntry; depth: number }) {
             onContextMenu={(e) => menuAt(e, docMenu(d))}
         >
             <span className="w-4" />
-            <Icon name="file" size={15} className="shrink-0 text-muted" />
+            <Icon name="markdown" size={15} className="shrink-0 text-muted" />
             <span className="flex-1 truncate">{d.name}</span>
             <button className="row-more ib !h-6 !min-w-6" aria-label="Document options" onClick={(e) => menuAt(e, docMenu(d))}>
                 <Icon name="more" size={14} />

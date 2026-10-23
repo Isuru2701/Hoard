@@ -204,7 +204,7 @@ const FeedItem = memo(function FeedItem(props: {
         >
             {entry.kind === 'markdown' ? (
                 <div className="flex h-full w-full flex-col justify-end bg-gradient-to-b from-white/[0.05] to-white/[0.02] p-3">
-                    <Icon name="file" size={22} className="text-muted" />
+                    <Icon name="markdown" size={22} className="text-muted" />
                 </div>
             ) : url ? (
                 <img src={url} alt="" draggable={false} className="object-cover" />
@@ -439,7 +439,7 @@ export function FolderPage({ path }: { path: string }) {
                         </Btn>
                         <IconBtn icon="folderPlus" title="New subfolder" ev="folder_new_subfolder_clicked" onClick={() => void createFolder(path)} />
                         <IconBtn icon="canvas" title="New canvas here" ev="folder_new_canvas_clicked" onClick={() => void createCanvas(path)} />
-                        <IconBtn icon="file" title="New markdown here" ev="folder_new_markdown_clicked" onClick={() => void createMarkdown(path)} />
+                        <IconBtn icon="markdown" title="New markdown here" ev="folder_new_markdown_clicked" onClick={() => void createMarkdown(path)} />
                     </>
                 }
             />

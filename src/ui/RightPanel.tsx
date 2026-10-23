@@ -225,7 +225,7 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                     <ThumbImg entry={entry} className="max-h-56 w-full !object-contain" />
                 </button>
                 <div className="mt-3 flex items-start gap-2">
-                    <Icon name={entry.kind === 'video' ? 'video' : 'images'} size={15} className="mt-0.5 shrink-0 text-muted" />
+                    <Icon name={entry.kind === 'video' ? 'video' : entry.kind === 'markdown' ? 'markdown' : 'images'} size={15} className="mt-0.5 shrink-0 text-muted" />
                     <div className="min-w-0 break-all text-sm font-semibold">{entry.name}</div>
                 </div>
                 <div className="mt-1 text-xs text-muted">

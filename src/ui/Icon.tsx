@@ -65,6 +65,13 @@ const paths = {
     pointer: <path d="M4 4l7 17 2.5-7.5L21 11z" />,
     hand: <path d="M18 11V6a2 2 0 0 0-4 0v5m0-1V4a2 2 0 0 0-4 0v6m0 .5V6a2 2 0 0 0-4 0v8m12-6a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" />,
     note: <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3ZM15 3v6h6" />,
+    markdown: (
+        <>
+            <rect x="2" y="5" width="20" height="14" rx="2.5" />
+            <path d="M6 15.5v-7l3 3.5 3-3.5v7" />
+            <path d="M16.5 9v5.5m-2-2.3 2 2.3 2-2.3" />
+        </>
+    ),
     text: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
     square: <rect x="4" y="4" width="16" height="16" rx="2" />,
     circle: <circle cx="12" cy="12" r="8.5" />,
@@ -138,6 +145,18 @@ const paths = {
     alignTop: <path d="M3 4h18M7 8v12M12 8v8M17 8v10" />,
     alignH: <path d="M12 3v18M6 7h12M8 12h8M5 17h14" />,
     alignV: <path d="M3 12h18M7 6v12M12 8v8M17 5v14" />,
+    group: (
+        <>
+            <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="3 3" />
+            <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" stroke="none" />
+        </>
+    ),
+    ungroup: (
+        <>
+            <rect x="4" y="4" width="11" height="11" rx="2" strokeDasharray="3 3" />
+            <rect x="15" y="15" width="6" height="6" rx="1" fill="currentColor" stroke="none" />
+        </>
+    ),
 };
 
 export type IconName = keyof typeof paths;

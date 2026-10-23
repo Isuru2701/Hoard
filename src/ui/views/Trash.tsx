@@ -4,7 +4,7 @@ import { dirname } from '../../lib/fs.ts';
 import { Btn, Empty, IconBtn, formatDate } from '../kit.tsx';
 import { Icon, type IconName } from '../Icon.tsx';
 
-const ICONS: Record<string, IconName> = { image: 'images', video: 'video', file: 'file', markdown: 'file', folder: 'folder', canvas: 'canvas' };
+const ICONS: Record<string, IconName> = { image: 'images', video: 'video', file: 'file', markdown: 'markdown', folder: 'folder', canvas: 'canvas' };
 
 export default function TrashView() {
     const trash = useStore((s) => s.meta.trash);

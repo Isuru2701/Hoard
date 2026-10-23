@@ -457,6 +457,62 @@ export class CanvasEngine {
         this.onAction('matched_size', { count: sel.length });
     }
 
+    // ------------------------------------------------------------ groups
+    /** All elements sharing a group id, in z-order. */
+    groupMembers(groupId: string): El[] {
+        return this.elements.filter((e) => e.group === groupId);
+    }
+    /** Whether any selected element belongs to a group. */
+    get selectionGrouped(): boolean {
+        for (const e of this.selectedEls()) if (e.group) return true;
+        return false;
+    }
+    /** Selection set grown to cover every member of any selected element's group. */
+    private withGroups(ids: Iterable<string>): Set<string> {
+        const out = new Set(ids);
+        if (!out.size) return out;
+        const gids = new Set<string>();
+        for (const e of this.elements) if (e.group && out.has(e.id)) gids.add(e.group);
+        if (!gids.size) return out;
+        for (const e of this.elements) if (e.group && gids.has(e.group)) out.add(e.id);
+        return out;
+    }
+    /** Ids that selecting `el` should activate: its full group, or just itself. */
+    private memberIds(el: El): string[] {
+        if (!el.group) return [el.id];
+        return this.groupMembers(el.group).map((e) => e.id);
+    }
+    /** Group the current selection under one fresh id. */
+    groupSelection() {
+        const sel = this.selectedEls();
+        if (sel.length < 2) return;
+        const gid = newId();
+        const ids = new Set(sel.map((e) => e.id));
+        this.elements = this.elements.map((e) => (ids.has(e.id) ? ({ ...e, group: gid }) : e));
+        this.commit();
+        this.onAction('grouped', { count: sel.length });
+        this.touch();
+    }
+    /** Dissolve every group touched by the selection. */
+    ungroupSelection() {
+        const gids = new Set<string>();
+        for (const e of this.selectedEls()) if (e.group) gids.add(e.group);
+        if (!gids.size) return;
+        this.elements = this.elements.map((e) => (e.group && gids.has(e.group) ? ({ ...e, group: undefined }) : e));
+        this.commit();
+        this.onAction('ungrouped', { count: gids.size });
+        this.touch();
+    }
+    /** Copies that bring ≥2 members of a group keep grouping under a fresh id;
+     *  singletons lose it so a pasted element can't drag unrelated originals. */
+    private remapGroups(copies: El[]): El[] {
+        const counts = new Map<string, number>();
+        for (const c of copies) if (c.group) counts.set(c.group, (counts.get(c.group) ?? 0) + 1);
+        const fresh = new Map<string, string>();
+        for (const [gid, n] of counts) if (n > 1) fresh.set(gid, newId());
+        return copies.map((c) => (c.group ? ({ ...c, group: fresh.get(c.group) }) : c));
+    }
+
     // ------------------------------------------------------------ editing commands
     get hasClipboard() {
         return this.clipboard.length > 0;
@@ -481,7 +537,7 @@ export class CanvasEngine {
             dx = at.x - (b.x0 + b.x1) / 2;
             dy = at.y - (b.y0 + b.y1) / 2;
         } else dx = dy = (24 * this.pasteN) / this.cam.z;
-        const copies = this.clipboard.map((e) => ({ ...e, id: newId(), x: e.x + dx, y: e.y + dy, locked: false }) as El);
+        const copies = this.remapGroups(this.clipboard.map((e) => ({ ...e, id: newId(), x: e.x + dx, y: e.y + dy, locked: false }) as El));
         this.elements = [...this.elements, ...copies];
         this.selected = new Set(copies.map((c) => c.id));
         this.commit();
@@ -492,7 +548,7 @@ export class CanvasEngine {
         const sel = this.selectedEls();
         if (!sel.length) return;
         const d = offset ?? 16 / this.cam.z;
-        const copies = sel.map((e) => ({ ...e, id: newId(), x: e.x + d, y: e.y + d, locked: false }) as El);
+        const copies = this.remapGroups(sel.map((e) => ({ ...e, id: newId(), x: e.x + d, y: e.y + d, locked: false }) as El));
         this.elements = [...this.elements, ...copies];
         this.selected = new Set(copies.map((c) => c.id));
         this.commit();
@@ -898,6 +954,13 @@ export class CanvasEngine {
         if (dbl) {
             const hit = this.hitTest(w);
             if (hit && !hit.locked) {
+                const members = this.memberIds(hit);
+                if (members.length > 1 && !(this.selected.size === 1 && this.selected.has(hit.id))) {
+                    // First double-click picks the member out of its group; a second
+                    // double-click on the now-single element edits/crops it as usual.
+                    this.selected = new Set([hit.id]);
+                    return;
+                }
                 if (hit.type === 'note') {
                     this.selected = new Set([hit.id]);
                     this.startEditing(hit.id);
@@ -927,15 +990,23 @@ export class CanvasEngine {
         const hit = this.hitTest(w);
         if (hit) {
             if (ev.shiftKey) {
+                const members = this.memberIds(hit);
                 const next = new Set(this.selected);
-                if (next.has(hit.id)) {
-                    next.delete(hit.id);
+                if (members.some((id) => next.has(id))) {
+                    // Shift-clicking any member removes the whole group again.
+                    for (const id of members) next.delete(id);
                     this.selected = next;
                     return;
                 }
-                next.add(hit.id);
+                for (const id of members) next.add(id);
                 this.selected = next;
-            } else if (!this.selected.has(hit.id)) this.selected = new Set([hit.id]);
+            } else if (!this.selected.has(hit.id)) {
+                this.selected = new Set(this.memberIds(hit));
+            } else if (hit.group) {
+                const members = this.memberIds(hit);
+                // clicked a member while only part of its group is selected: act on the group
+                if (!members.every((id) => this.selected.has(id))) this.selected = new Set(members);
+            }
             if (ev.altKey) this.duplicate(0);
             const orig = new Map<string, Pt>();
             for (const e of this.selectedEls()) if (!e.locked) orig.set(e.id, { x: e.x, y: e.y });
@@ -963,7 +1034,11 @@ export class CanvasEngine {
         const tol = 8 / this.cam.z;
         for (let i = this.elements.length - 1; i >= 0; i--) {
             const e = this.elements[i];
-            if (!e.locked && hitEl(e, w, tol)) this.erasing.add(e.id);
+            if (e.locked || this.erasing.has(e.id) || !hitEl(e, w, tol)) continue;
+            // a group erases as one unit
+            if (e.group) {
+                for (const m of this.groupMembers(e.group)) if (!m.locked) this.erasing.add(m.id);
+            } else this.erasing.add(e.id);
         }
     }
 
@@ -1045,7 +1120,7 @@ export class CanvasEngine {
                     const a = aabb(e);
                     if (a.x0 >= b.x0 && a.x1 <= b.x1 && a.y0 >= b.y0 && a.y1 <= b.y1) sel.add(e.id);
                 }
-                this.selected = sel;
+                this.selected = this.withGroups(sel);
                 break;
             }
             case 'create':
@@ -1265,7 +1340,7 @@ export class CanvasEngine {
         ev.preventDefault();
         const s = this.local(ev);
         const hit = this.hitTest(this.toWorld(s.x, s.y));
-        if (hit && !this.selected.has(hit.id)) this.selected = new Set([hit.id]);
+        if (hit && !this.selected.has(hit.id)) this.selected = new Set(this.memberIds(hit));
         this.touch();
         this.onMenu(ev.clientX, ev.clientY, !!hit);
     };
@@ -1327,6 +1402,7 @@ export class CanvasEngine {
         if (e.key === '[') return mod ? this.toBack() : this.backward(), true;
         if (e.shiftKey && e.code === 'Digit1') return this.fit(false), true;
         if (e.shiftKey && e.code === 'Digit2') return this.fit(true), true;
+        if (k === 'g') return e.shiftKey ? this.ungroupSelection() : this.groupSelection(), true;
         if (mod || e.altKey || e.shiftKey) return false;
         if (k === 'i') {
             this.onAction('eyedropper');
@@ -1580,6 +1656,27 @@ export class CanvasEngine {
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = ACCENT;
         if (!this.crop) {
+            const selIds = new Set(sel.map((e) => e.id));
+            const gids = new Set<string>();
+            for (const e of sel) if (e.group) gids.add(e.group);
+            const solidFrames: Box[] = [];
+            const faint: Box[] = [];
+            for (const gid of gids) {
+                const members = this.groupMembers(gid);
+                if (members.length < 2) continue;
+                if (members.every((m) => selIds.has(m.id))) {
+                    // whole group selected: one frame around it (that frame carries the handles)
+                    solidFrames.push(groupBox(members));
+                } else {
+                    // partially selected: unselected members get a faint hint of the group
+                    for (const m of members) if (!selIds.has(m.id)) faint.push(aabb(m));
+                }
+            }
+            let groupOnlyFrame = false;
+            if (gids.size === 1 && solidFrames.length === 1) {
+                const members = this.groupMembers([...gids][0]);
+                groupOnlyFrame = members.length === sel.length && members.every((m) => selIds.has(m.id));
+            }
             for (const e of sel) {
                 if (e.id === this.editingId) continue;
                 const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
@@ -1593,12 +1690,30 @@ export class CanvasEngine {
                 ctx.stroke();
             }
             ctx.setLineDash([]);
-            if (sel.length > 1) {
+            if (sel.length > 1 && !groupOnlyFrame) {
                 const b = groupBox(sel);
                 const a = this.toScreen(b.x0, b.y0), c = this.toScreen(b.x1, b.y1);
                 ctx.setLineDash([5, 4]);
                 ctx.strokeRect(a.x, a.y, c.x - a.x, c.y - a.y);
                 ctx.setLineDash([]);
+            }
+            for (const b of solidFrames) {
+                const a = this.toScreen(b.x0, b.y0), c = this.toScreen(b.x1, b.y1);
+                ctx.lineWidth = 2;
+                ctx.strokeRect(a.x - 5, a.y - 5, (c.x - a.x) + 10, (c.y - a.y) + 10);
+                ctx.lineWidth = 1.5;
+            }
+            if (faint.length) {
+                ctx.strokeStyle = 'rgba(91,156,255,0.45)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                for (const b of faint) {
+                    const a = this.toScreen(b.x0, b.y0), c = this.toScreen(b.x1, b.y1);
+                    ctx.strokeRect(a.x, a.y, c.x - a.x, c.y - a.y);
+                }
+                ctx.setLineDash([]);
+                ctx.strokeStyle = ACCENT;
+                ctx.lineWidth = 1.5;
             }
             this.drawHandles(this.handles());
         } else {

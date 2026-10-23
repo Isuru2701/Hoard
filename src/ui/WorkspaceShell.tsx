@@ -37,7 +37,7 @@ export function viewLabel(v: View): string {
 export function viewIcon(v: View): IconName {
     if (v.kind === 'folder') return 'folder';
     if (v.kind === 'canvas') return 'canvas';
-    if (v.kind === 'doc') return 'file';
+    if (v.kind === 'doc') return 'markdown';
     if (v.kind === 'tag') return 'tag';
     return 'home';
 }

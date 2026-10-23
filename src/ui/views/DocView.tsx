@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { getRoot, rescan } from '../../state/actions.ts';
+import { getRoot, rescanSoon } from '../../state/actions.ts';
 import { basename, readText, writeFile } from '../../lib/fs.ts';
 import { splitFrontmatter, joinDoc } from '../../lib/frontmatter.ts';
 import { notifyDocChanged } from '../../lib/docEvents.ts';
@@ -54,7 +54,8 @@ export default function DocView({ path }: { path: string }) {
         try {
             await writeFile(root, path, joinDoc(frontmatter, body, eol));
             notifyDocChanged(path);
-            void rescan();
+            // Bursty while typing; the workspace walk is coalesced elsewhere.
+            void rescanSoon();
         } catch (err) {
             console.warn('[doc] save failed', err);
         }
@@ -89,19 +90,24 @@ export default function DocView({ path }: { path: string }) {
     };
 
     // Ctrl+S saves now; when leaving the document, flush any pending edit to disk.
+    // Runs once per mounted document: `flush` is reached through a ref so it always
+    // sees the latest frontmatter/raw without re-running this effect — a no-deps
+    // cleanup here used to force-save (and rescan the whole workspace) per keystroke.
+    const flushRef = useRef<() => void>(() => {});
+    flushRef.current = flush;
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
                 e.preventDefault();
-                flush();
+                flushRef.current();
             }
         };
         window.addEventListener('keydown', onKey);
         return () => {
             window.removeEventListener('keydown', onKey);
-            flush();
+            flushRef.current();
         };
-    });
+    }, []);
 
     const switchMode = (next: Mode) => {
         if (next === mode) return;

@@ -30,12 +30,23 @@ const base64ToBytes = (value: string): Uint8Array => {
 
 class NativeFileHandle {
     readonly kind = 'file' as const;
-    constructor(private readonly path: string, public readonly name: string) {}
+    /** Metadata already known from `list_directory`, without reading the file. */
+    readonly size: number;
+    readonly modified: number;
+    constructor(private readonly path: string, public readonly name: string, size = 0, modified = 0) {
+        this.size = size;
+        this.modified = modified;
+    }
 
     async getFile(): Promise<File> {
         const result = await invoke<NativeFile>('read_file', { path: this.path });
         const bytes = base64ToBytes(result.data);
         return new File([bytes.buffer as ArrayBuffer], result.name, { lastModified: result.modified });
+    }
+
+    /** Metadata-only stat so workspace scans never read file contents over IPC. */
+    async statInfo(): Promise<{ size: number; modified: number }> {
+        return { size: this.size, modified: this.modified };
     }
 
     async createWritable() {
@@ -62,7 +73,9 @@ class NativeDirHandle {
             const childPath = `${this.path}\\${entry.name}`;
             yield [
                 entry.name,
-                entry.kind === 'directory' ? new NativeDirHandle(childPath, entry.name) : new NativeFileHandle(childPath, entry.name),
+                entry.kind === 'directory'
+                    ? new NativeDirHandle(childPath, entry.name)
+                    : new NativeFileHandle(childPath, entry.name, entry.size ?? 0, entry.modified ?? 0),
             ];
         }
     }

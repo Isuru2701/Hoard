@@ -79,7 +79,7 @@ export function ThumbImg({ entry, className = '' }: { entry: MediaRef; className
     useEffect(() => {
         let live = true;
         const root = getRoot();
-        if (!root || entry.kind === 'file') return;
+        if (!root || entry.kind === 'file' || entry.kind === 'markdown') return;
         setUrl(null);
         getThumbUrl(wsId, root, entry).then((u) => {
             if (live) setUrl(u);
@@ -88,10 +88,10 @@ export function ThumbImg({ entry, className = '' }: { entry: MediaRef; className
             live = false;
         };
     }, [wsId, entry.path, entry.modified, entry.size, entry.kind]);
-    if (entry.kind === 'file')
+    if (entry.kind === 'file' || entry.kind === 'markdown')
         return (
             <div className={`grid place-items-center bg-white/5 text-muted ${className}`}>
-                <Icon name="file" size={22} />
+                <Icon name={entry.kind === 'markdown' ? 'markdown' : 'file'} size={22} />
             </div>
         );
     return url ? <img src={url} className={`object-cover ${className}`} draggable={false} alt="" /> : <div className={`skeleton ${className}`} />;

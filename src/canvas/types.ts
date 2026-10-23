@@ -22,6 +22,8 @@ interface Base {
     r: number;
     opacity: number;
     locked?: boolean;
+    /** id shared by every member of a canvas group */
+    group?: string;
 }
 export interface ImageEl extends Base {
     type: 'image';

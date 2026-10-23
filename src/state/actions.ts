@@ -290,6 +290,7 @@ export async function rescan() {
         const result = await scanWorkspace(r);
         if (root !== r) return;
         store.patch({ scan: result });
+        rescanLastAt = Date.now();
         const s = store.get();
         const stats = {
             folders: result.folders.length,
@@ -301,6 +302,19 @@ export async function rescan() {
         console.warn('[scan] failed', e);
         toast('Could not read the workspace folder');
     }
+}
+
+/** Cooldown between scan-triggered refreshes, adjusted on finish so a slow walk doesn't loop hot. */
+const RESCAN_COOLDOWN_MS = 2500;
+let rescanLastAt = 0;
+let rescanSoonTimer = 0;
+/** Coalesced rescan for bursty triggers (doc saves while typing): at most one full
+ *  walk per cooldown, with a trailing run so the last change still shows up. */
+export function rescanSoon(): void {
+    if (!root) return;
+    window.clearTimeout(rescanSoonTimer);
+    const delay = Math.max(0, RESCAN_COOLDOWN_MS - (Date.now() - rescanLastAt));
+    rescanSoonTimer = window.setTimeout(() => void rescan(), delay);
 }
 
 // ---------------------------------------------------------------- navigation
@@ -822,7 +836,7 @@ export function createMenuItems(folder: string): MenuItem[] {
     return [
         { label: folder ? 'New subfolder' : 'New folder', icon: 'folderPlus', ev: 'create_menu_folder', onClick: () => void createFolder(folder) },
         { label: 'New canvas', icon: 'canvas', ev: 'create_menu_canvas', onClick: () => void createCanvas(folder) },
-        { label: 'New markdown', icon: 'file', ev: 'create_menu_markdown', onClick: () => void createMarkdown(folder) },
+        { label: 'New markdown', icon: 'markdown', ev: 'create_menu_markdown', onClick: () => void createMarkdown(folder) },
         { label: 'Import images & videos', icon: 'upload', ev: 'create_menu_import', onClick: () => void importInto(folder || 'Inbox') },
     ];
 }

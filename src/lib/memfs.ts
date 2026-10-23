@@ -14,6 +14,9 @@ class MemFileHandle {
     async getFile(): Promise<File> {
         return new File([this.blob], this.name, { lastModified: this.modified, type: this.blob.type });
     }
+    async statInfo(): Promise<{ size: number; modified: number }> {
+        return { size: this.blob.size, modified: this.modified };
+    }
     async createWritable() {
         const parts: BlobPart[] = [];
         return {

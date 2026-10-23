@@ -40,6 +40,16 @@ export interface ScanResult {
     byPath: Map<string, FileEntry>;
 }
 
+/** Metadata-only access. Native (Tauri) handles expose `statInfo()` so a scan never
+ *  pulls file contents over IPC — `getFile()` would read and base64-ship every file. */
+type FileHandleLike = FileSystemFileHandle & { statInfo?: () => Promise<{ size: number; modified: number }> };
+
+async function metaOf(handle: FileHandleLike): Promise<{ size: number; modified: number }> {
+    if (handle.statInfo) return handle.statInfo();
+    const f = await handle.getFile();
+    return { size: f.size, modified: f.lastModified };
+}
+
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
 export async function scanWorkspace(root: Dir): Promise<ScanResult> {
@@ -69,20 +79,19 @@ export async function scanWorkspace(root: Dir): Promise<ScanResult> {
             } else {
                 const kind = kindOf(name);
                 jobs.push(
-                    (handle as FileSystemFileHandle)
-                        .getFile()
-                        .then((f) => {
+                    metaOf(handle as FileHandleLike)
+                        .then(({ size, modified }) => {
                             if (kind === 'canvas') {
                                 if (!hidden) {
-                                    const c = { path: p, name: name.slice(0, -CANVAS_EXT.length), folder: path, modified: f.lastModified };
+                                    const c = { path: p, name: name.slice(0, -CANVAS_EXT.length), folder: path, modified };
                                     canvases.push(c);
                                     node.canvases.push(c);
                                 }
                                 return;
                             }
-                            files.push({ path: p, name, kind, size: f.size, modified: f.lastModified, folder: path, hidden });
+                            files.push({ path: p, name, kind, size, modified, folder: path, hidden });
                             if (kind === 'markdown' && !hidden) {
-                                const d = { path: p, name: name.replace(/\.(md|markdown|mdx)$/i, ''), folder: path, modified: f.lastModified };
+                                const d = { path: p, name: name.replace(/\.(md|markdown|mdx)$/i, ''), folder: path, modified };
                                 docs.push(d);
                                 node.docs.push(d);
                             }
