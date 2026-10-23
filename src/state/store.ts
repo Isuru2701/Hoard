@@ -13,10 +13,11 @@ export type View =
     | { kind: 'tags' }
     | { kind: 'tag'; tag: string }
     | { kind: 'folder'; path: string }
-    | { kind: 'canvas'; path: string };
+    | { kind: 'canvas'; path: string }
+    | { kind: 'doc'; path: string };
 
 export function viewKey(v: View): string {
-    if (v.kind === 'folder' || v.kind === 'canvas') return `${v.kind}:${v.path}`;
+    if (v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'doc') return `${v.kind}:${v.path}`;
     if (v.kind === 'tag') return `tag:${v.tag}`;
     return v.kind;
 }

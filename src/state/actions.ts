@@ -4,18 +4,20 @@ import {
     ASSETS_SUFFIX,
     CANVAS_EXT,
     TRASH_DIR,
+    IMPORT_ACCEPT,
     basename,
     dirname,
     entryKind,
     extOf,
     getDir,
-    isMediaFile,
+    isImportableFile,
     joinPath,
     kindOf,
     moveEntry,
     removePath,
     sanitizeName,
     uniqueName,
+    writeFile,
     writeIn,
     type Dir,
 } from '../lib/fs.ts';
@@ -97,7 +99,7 @@ export function menuAt(e: { clientX: number; clientY: number; preventDefault(): 
     openMenu(e.clientX, e.clientY, items);
 }
 
-export function pickFiles(accept = 'image/*,video/*'): Promise<File[]> {
+export function pickFiles(accept = IMPORT_ACCEPT): Promise<File[]> {
     return new Promise((res) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -253,7 +255,8 @@ export async function openWorkspace(id: string): Promise<boolean> {
         const view = restoreView(current.view);
         const valid = view.kind === 'home' || view.kind === 'all' || view.kind === 'favorites' || view.kind === 'trash' || view.kind === 'tags'
             || (view.kind === 'folder' && !!current.scan?.byPath.has(view.path))
-            || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path));
+            || (view.kind === 'canvas' && !!current.scan?.canvases.some((canvas) => canvas.path === view.path))
+            || (view.kind === 'doc' && !!current.scan?.byPath.has(view.path));
         store.patch({ view: valid ? view : { kind: 'home' } });
     }
     store.patch({ screen: 'workspace' });
@@ -300,7 +303,7 @@ export async function rescan() {
 }
 
 // ---------------------------------------------------------------- navigation
-const tabbable = (v: View) => v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'tag';
+const tabbable = (v: View) => v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'tag' || v.kind === 'doc';
 
 function persistLastView(view: View) {
     if (!isTauri()) return;
@@ -319,7 +322,7 @@ export function navigate(view: View) {
     if (tabbable(view) && !tabs.some((t) => viewKey(t) === viewKey(view))) tabs = [...tabs, view].slice(-12);
     store.patch({ view, tabs, back: [...s.back, s.view].slice(-50), fwd: [], selection: [], focus: null });
     persistLastView(view);
-    if (view.kind === 'folder' || view.kind === 'canvas') addRecent(view.path, view.kind);
+    if (view.kind === 'folder' || view.kind === 'canvas' || view.kind === 'doc') addRecent(view.path, view.kind);
 }
 
 export function goBack() {
@@ -389,7 +392,27 @@ export function updateItemMeta(path: string, patch: Partial<ItemMeta>) {
     setMeta({ ...m, items: { ...m.items, [path]: { ...(m.items[path] ?? {}), ...patch } } });
 }
 
-export function addRecent(path: string, kind: 'folder' | 'canvas') {
+export type PaletteChannel = 'stroke' | 'fill' | 'noteBg';
+
+function setPaletteChannel(channel: PaletteChannel, colors: string[]) {
+    const m = store.get().meta;
+    setMeta({ ...m, palette: { ...(m.palette ?? { stroke: [], fill: [], noteBg: [] }), [channel]: colors } });
+}
+
+/** Save a custom canvas color so it shows up as a swatch in the style bar. */
+export function addPaletteColor(channel: PaletteChannel, css: string) {
+    const cur = store.get().meta.palette?.[channel] ?? [];
+    if (cur.includes(css)) return;
+    setPaletteChannel(channel, [...cur, css]);
+}
+
+/** Ctrl+click remove from the custom swatches. */
+export function removePaletteColor(channel: PaletteChannel, css: string) {
+    setPaletteChannel(channel, (store.get().meta.palette?.[channel] ?? []).filter((c) => c !== css));
+    flushMeta();
+}
+
+export function addRecent(path: string, kind: 'folder' | 'canvas' | 'doc') {
     const m = store.get().meta;
     setMeta({ ...m, recents: [{ path, kind, at: Date.now() }, ...m.recents.filter((r) => r.path !== path)].slice(0, 12) });
 }
@@ -410,7 +433,7 @@ function remapMeta(from: string, to: string) {
 }
 
 function remapViews(from: string, to: string) {
-    const fix = (v: View): View => (v.kind === 'folder' || v.kind === 'canvas' ? { ...v, path: remapKey(v.path, from, to) ?? v.path } : v);
+    const fix = (v: View): View => (v.kind === 'folder' || v.kind === 'canvas' || v.kind === 'doc' ? { ...v, path: remapKey(v.path, from, to) ?? v.path } : v);
     const s = store.get();
     store.patch({
         view: fix(s.view),
@@ -455,6 +478,10 @@ export async function autoTagItem(path: string, maxTags: number): Promise<void> 
         toast('That item is no longer available');
         return;
     }
+    if (entry.kind === 'markdown') {
+        toast('Auto-tagging is only available for images and videos');
+        return;
+    }
     try {
         const tags = await tagWithModel(root, entry, maxTags);
         applyAutoTags({ [path]: tags });
@@ -493,9 +520,9 @@ export function addPathsToCanvas(canvasPath: string, sourcePaths: string[]) {
 // ---------------------------------------------------------------- file operations
 export async function importFiles(folder: string, files: File[]): Promise<string[]> {
     if (!root) return [];
-    const media = files.filter(isMediaFile);
+    const media = files.filter(isImportableFile);
     if (!media.length) {
-        toast('Only images and videos can be imported');
+        toast('Only images, videos and markdown files can be imported');
         return [];
     }
     toast(`Importing ${media.length} file${media.length > 1 ? 's' : ''}…`);
@@ -544,6 +571,20 @@ export async function createCanvas(folder: string) {
     await dir.getDirectoryHandle(name + ASSETS_SUFFIX, { create: true });
     await rescan();
     navigate({ kind: 'canvas', path: joinPath(folder, name + CANVAS_EXT) });
+}
+
+export async function createMarkdown(folder: string) {
+    if (!root) return;
+    const raw = await askText('New markdown file', 'Untitled');
+    if (!raw) return;
+    const dir = await getDir(root, folder, true);
+    const base = sanitizeName(raw);
+    let name = base;
+    let n = 2;
+    while (await entryKind(dir, name + '.md')) name = `${base} (${n++})`;
+    await writeFile(root, joinPath(folder, name + '.md'), '');
+    await rescan();
+    navigate({ kind: 'doc', path: joinPath(folder, name + '.md') });
 }
 
 export type EntryType = 'folder' | 'canvas' | 'file';
@@ -737,6 +778,7 @@ export function createMenuItems(folder: string): MenuItem[] {
     return [
         { label: folder ? 'New subfolder' : 'New folder', icon: 'folderPlus', ev: 'create_menu_folder', onClick: () => void createFolder(folder) },
         { label: 'New canvas', icon: 'canvas', ev: 'create_menu_canvas', onClick: () => void createCanvas(folder) },
+        { label: 'New markdown', icon: 'file', ev: 'create_menu_markdown', onClick: () => void createMarkdown(folder) },
         { label: 'Import images & videos', icon: 'upload', ev: 'create_menu_import', onClick: () => void importInto(folder || 'Inbox') },
     ];
 }

@@ -12,6 +12,7 @@ import TrashView from './views/Trash.tsx';
 import SearchModal from './SearchModal.tsx';
 import Viewer from './Viewer.tsx';
 import CanvasView from '../canvas/CanvasView.tsx';
+import DocView from './views/DocView.tsx';
 import { Empty } from './kit.tsx';
 
 function useWidth() {
@@ -29,11 +30,16 @@ const TITLES: Record<string, string> = { home: 'Home', all: 'All', favorites: 'F
 export function viewLabel(v: View): string {
     if (v.kind === 'folder') return basename(v.path);
     if (v.kind === 'canvas') return canvasName(v.path);
+    if (v.kind === 'doc') return basename(v.path).replace(/\.(md|markdown|mdx)$/i, '') || 'Document';
     if (v.kind === 'tag') return `#${v.tag}`;
     return TITLES[v.kind];
 }
 export function viewIcon(v: View): IconName {
-    return v.kind === 'folder' ? 'folder' : v.kind === 'canvas' ? 'canvas' : v.kind === 'tag' ? 'tag' : 'home';
+    if (v.kind === 'folder') return 'folder';
+    if (v.kind === 'canvas') return 'canvas';
+    if (v.kind === 'doc') return 'file';
+    if (v.kind === 'tag') return 'tag';
+    return 'home';
 }
 
 function Breadcrumbs() {
@@ -131,6 +137,8 @@ function ViewRouter() {
             return <CanvasView key={view.path} path={view.path} />;
         case 'folder':
             return <FolderPage key={view.path} path={view.path} />;
+        case 'doc':
+            return <DocView key={view.path} path={view.path} />;
         case 'all':
             return <CollectionPage key="all" kind="all" />;
         case 'favorites':

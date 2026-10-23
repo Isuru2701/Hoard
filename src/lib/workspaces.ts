@@ -59,7 +59,7 @@ export function restoreView(value: unknown): View {
     if (candidate.kind === 'home' || candidate.kind === 'all' || candidate.kind === 'favorites' || candidate.kind === 'trash' || candidate.kind === 'tags') {
         return { kind: candidate.kind };
     }
-    if (candidate.kind === 'folder' || candidate.kind === 'canvas') {
+    if (candidate.kind === 'folder' || candidate.kind === 'canvas' || candidate.kind === 'doc') {
         return typeof candidate.path === 'string' && candidate.path.length > 0 ? { kind: candidate.kind, path: candidate.path } : { kind: 'home' };
     }
     if (candidate.kind === 'tag') {

@@ -17,13 +17,13 @@ export interface TrashEntry {
     originalPath: string;
     trashName: string;
     assetsTrashName?: string;
-    kind: 'image' | 'video' | 'file' | 'folder' | 'canvas';
+    kind: 'image' | 'video' | 'file' | 'folder' | 'canvas' | 'markdown';
     deletedAt: number;
     meta?: Record<string, ItemMeta>;
 }
 export interface RecentEntry {
     path: string;
-    kind: 'folder' | 'canvas';
+    kind: 'folder' | 'canvas' | 'doc';
     at: number;
 }
 export interface WorkspaceMeta {
@@ -31,6 +31,8 @@ export interface WorkspaceMeta {
     items: Record<string, ItemMeta>;
     trash: TrashEntry[];
     recents: RecentEntry[];
+    /** Custom color swatches added in the canvas, per style channel. */
+    palette?: { stroke: string[]; fill: string[]; noteBg: string[] };
 }
 
 const META_FILE = '.hoard/meta.json';
@@ -42,7 +44,7 @@ export async function loadMeta(root: Dir): Promise<WorkspaceMeta> {
     if (!t) return emptyMeta();
     try {
         const m = JSON.parse(t) as Partial<WorkspaceMeta>;
-        return { version: 1, items: m.items ?? {}, trash: m.trash ?? [], recents: m.recents ?? [] };
+        return { version: 1, items: m.items ?? {}, trash: m.trash ?? [], recents: m.recents ?? [], palette: m.palette ?? { stroke: [], fill: [], noteBg: [] } };
     } catch {
         return emptyMeta();
     }

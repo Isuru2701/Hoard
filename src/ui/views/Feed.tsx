@@ -1,7 +1,7 @@
 import type React from 'react';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react';
 import { store, useStore, type FeedSort } from '../../state/store.ts';
-import { addPathsToCanvas, createCanvas, createFolder, getRoot, importFiles, importInto, menuAt, navigate, openMenu, openViewer, toast, trashItems, updateItemMeta } from '../../state/actions.ts';
+import { addPathsToCanvas, createCanvas, createFolder, createMarkdown, getRoot, importFiles, importInto, menuAt, navigate, openMenu, openViewer, toast, trashItems, updateItemMeta } from '../../state/actions.ts';
 import { DRAG_MIME } from '../../lib/fs.ts';
 import { findFolder, type FileEntry } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
@@ -134,7 +134,7 @@ const FeedItem = memo(function FeedItem(props: {
     useEffect(() => {
         let live = true;
         const root = getRoot();
-        if (!root) return;
+        if (!root || entry.kind === 'markdown') return;
         getThumbUrl(wsId, root, entry).then((u) => {
             if (live) setUrl(u);
         });
@@ -160,7 +160,15 @@ const FeedItem = memo(function FeedItem(props: {
             onDoubleClick={() => onOpen(entry.path)}
             onContextMenu={(e) => onMenu(e, entry.path)}
         >
-            {url ? <img src={url} alt="" draggable={false} className="object-cover" /> : <div className="skeleton h-full w-full" />}
+            {entry.kind === 'markdown' ? (
+                <div className="flex h-full w-full flex-col justify-end bg-gradient-to-b from-white/[0.05] to-white/[0.02] p-3">
+                    <Icon name="file" size={22} className="text-muted" />
+                </div>
+            ) : url ? (
+                <img src={url} alt="" draggable={false} className="object-cover" />
+            ) : (
+                <div className="skeleton h-full w-full" />
+            )}
             {entry.kind === 'video' && (
                 <div className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/60">
                     <Icon name="video" size={14} />
@@ -248,7 +256,14 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
             store.patch({ selection: next, focus: next.length === 1 ? next[0] : path });
         } else store.patch({ selection: [path], focus: path });
     };
-    const onOpen = (path: string) => openViewer(paths, paths.indexOf(path));
+    const onOpen = (path: string) => {
+        const entry = items.find((i) => i.path === path);
+        if (entry?.kind === 'markdown') {
+            navigate({ kind: 'doc', path });
+            return;
+        }
+        openViewer(paths, paths.indexOf(path));
+    };
     const onMenu = (e: React.MouseEvent, path: string) => {
         const s = store.get();
         if (!s.selection.includes(path)) store.patch({ selection: [path], focus: path });
@@ -309,7 +324,12 @@ export function Feed({ items, emptyText, showInfoInFolder = false }: { items: Fi
             } else if (e.key === 'Escape') store.patch({ selection: [], focus: null });
             else if (e.key === ' ' && s.focus) {
                 e.preventDefault();
-                onOpen(s.focus);
+                const focusKind = items.find((i) => i.path === s.focus)?.kind;
+                if (focusKind === 'markdown') {
+                    navigate({ kind: 'doc', path: s.focus });
+                } else {
+                    onOpen(s.focus);
+                }
             }
         };
         window.addEventListener('keydown', onKey);
@@ -358,6 +378,7 @@ export function FolderPage({ path }: { path: string }) {
                         </Btn>
                         <IconBtn icon="folderPlus" title="New subfolder" ev="folder_new_subfolder_clicked" onClick={() => void createFolder(path)} />
                         <IconBtn icon="canvas" title="New canvas here" ev="folder_new_canvas_clicked" onClick={() => void createCanvas(path)} />
+                        <IconBtn icon="file" title="New markdown here" ev="folder_new_markdown_clicked" onClick={() => void createMarkdown(path)} />
                     </>
                 }
             />

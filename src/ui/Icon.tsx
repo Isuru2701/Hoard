@@ -131,6 +131,7 @@ const paths = {
         </>
     ),
     sliders: <path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6" />,
+    dropper: <path d="M14 7l3 3M20.5 3.5a2.1 2.1 0 0 0-3 0L14 7l3 3 3.5-3.5a2.1 2.1 0 0 0 0-3ZM12.5 8.5 4 17a2 2 0 0 0-.5.9L3 21l3.1-.5a2 2 0 0 0 .9-.5l8.5-8.5" />,
     pkg: <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />,
     edit: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
     alignLeft: <path d="M4 3v18M8 7h12M8 12h8M8 17h10" />,

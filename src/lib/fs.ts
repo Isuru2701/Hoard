@@ -8,8 +8,12 @@ export const DRAG_MIME = 'application/x-hoard-paths';
 
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'svg', 'jfif']);
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv']);
+const DOC_EXT = new Set(['md', 'markdown', 'mdx']);
 
-export type Kind = 'image' | 'video' | 'canvas' | 'file';
+export type Kind = 'image' | 'video' | 'canvas' | 'file' | 'markdown';
+
+/** File-picker filter used everywhere files can be imported. */
+export const IMPORT_ACCEPT = 'image/*,video/*,.md,.markdown,.mdx,text/markdown,text/plain';
 
 export function extOf(name: string): string {
     const i = name.lastIndexOf('.');
@@ -21,12 +25,33 @@ export function kindOf(name: string): Kind {
     const e = extOf(name);
     if (IMAGE_EXT.has(e)) return 'image';
     if (VIDEO_EXT.has(e)) return 'video';
+    if (DOC_EXT.has(e)) return 'markdown';
     return 'file';
 }
 
 export function isMediaFile(f: File): boolean {
     const k = kindOf(f.name);
     return k === 'image' || k === 'video' || f.type.startsWith('image/') || f.type.startsWith('video/');
+}
+
+export function isDocFile(f: File): boolean {
+    return kindOf(f.name) === 'markdown' || f.type === 'text/markdown' || f.type === 'text/x-markdown';
+}
+
+export function isImportableFile(f: File): boolean {
+    return isMediaFile(f) || isDocFile(f);
+}
+
+/** Display title for a markdown path: the filename without its extension. */
+export function docTitleOf(path: string): string {
+    return basename(path).replace(/\.(md|markdown|mdx)$/i, '');
+}
+
+/** Move a workspace path from `from` to `to`; null when the path is outside the moved tree. */
+export function remapPath(path: string, from: string, to: string): string | null {
+    if (path === from) return to;
+    if (path.startsWith(from + '/')) return to + path.slice(from.length);
+    return null;
 }
 
 export const splitPath = (p: string) => p.split('/').filter(Boolean);

@@ -72,6 +72,12 @@ export const NOTE_BGS = ['#fde68a', '#fecaca', '#bbf7d0', '#bfdbfe', '#e9d5ff', 
 export const WIDTHS = [1, 2, 4, 8];
 export const FONT_SIZES = [14, 18, 24, 36];
 
+import { luminance, parseCssColor } from './color.ts';
+
 export function noteTextColor(bg: string): string {
-    return bg === '#2a2a2a' || bg === 'transparent' ? '#e5e5e5' : '#1f1f1f';
+    if (bg === 'transparent') return '#e5e5e5';
+    if (!bg.startsWith('#')) return '#1f1f1f';
+    const c = parseCssColor(bg);
+    if (!c) return '#1f1f1f';
+    return luminance(c) > 0.55 ? '#1f1f1f' : '#e5e5e5';
 }

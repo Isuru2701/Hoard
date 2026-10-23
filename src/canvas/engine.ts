@@ -171,6 +171,8 @@ export class CanvasEngine {
     style: DrawStyle = { stroke: '#e5e5e5', fill: 'transparent', sw: 2, noteBg: '#fde68a', fontSize: 18 };
     cam: Camera = { ox: 0, oy: 0, z: 1 };
     snapToGrid = false;
+    /** Tool lock: when on, creation tools stay active after use instead of switching back to select. */
+    toolLock: boolean;
     editingId: string | null = null;
     crop: CropState | null = null;
     version = 0;
@@ -205,6 +207,11 @@ export class CanvasEngine {
 
     constructor(private canvas: HTMLCanvasElement, private images: ImageProvider) {
         this.ctx = canvas.getContext('2d')!;
+        try {
+            this.toolLock = localStorage.getItem('hoard.canvas.toolLock') === '1';
+        } catch {
+            this.toolLock = false;
+        }
         canvas.addEventListener('pointerdown', this.onDown);
         canvas.addEventListener('pointermove', this.onMove);
         canvas.addEventListener('pointerup', this.onUp);
@@ -387,6 +394,17 @@ export class CanvasEngine {
         if (t !== 'select') this.selected = new Set();
         this.canvas.style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'text' ? 'text' : 'crosshair';
         this.touch();
+    }
+    /** Toolbar lock icon: keep the current tool active (persisted across canvas sessions). */
+    toggleToolLock() {
+        this.toolLock = !this.toolLock;
+        try {
+            localStorage.setItem('hoard.canvas.toolLock', this.toolLock ? '1' : '0');
+        } catch {
+            /* storage blocked */
+        }
+        this.touch();
+        this.onAction('tool_lock_toggled', { on: this.toolLock });
     }
     private replace(id: string, fn: (e: El) => El) {
         this.elements = this.elements.map((e) => (e.id === id ? fn(e) : e));
@@ -585,18 +603,18 @@ export class CanvasEngine {
         this.commit();
         this.onAction('tidied', { count: sel.length });
     }
-    applyStyle(p: Partial<DrawStyle>) {
+    applyStyle(p: Partial<DrawStyle>, commitNow = false) {
         Object.assign(this.style, p);
         if (!this.selected.size) {
             this.touch();
             return;
         }
         const k = 1 / this.cam.z;
-        this.elements = this.elements.map((e) => {
-            if (!this.selected.has(e.id)) return e;
+        this.updateSelected((e) => {
             if (e.type === 'rect' || e.type === 'ellipse')
-                return { ...e, stroke: p.stroke ?? e.stroke, fill: p.fill ?? e.fill, sw: p.sw !== undefined ? p.sw * k : e.sw };
-            if (e.type === 'line' || e.type === 'arrow' || e.type === 'draw') return { ...e, stroke: p.stroke ?? e.stroke, sw: p.sw !== undefined ? p.sw * k : e.sw };
+                return { stroke: p.stroke ?? e.stroke, fill: p.fill ?? e.fill, sw: p.sw !== undefined ? p.sw * k : e.sw };
+            if (e.type === 'line' || e.type === 'arrow' || e.type === 'draw')
+                return { stroke: p.stroke ?? e.stroke, sw: p.sw !== undefined ? p.sw * k : e.sw };
             if (e.type === 'note') {
                 const n = { ...e };
                 if (p.fontSize !== undefined) n.fontSize = p.fontSize * k;
@@ -607,9 +625,8 @@ export class CanvasEngine {
                 }
                 return n;
             }
-            return e;
-        });
-        this.commit();
+            return {};
+        }, commitNow);
     }
 
     // ------------------------------------------------------------ adding content
@@ -637,7 +654,7 @@ export class CanvasEngine {
             }
             y += rowDims[ri].h + gap;
         });
-        if (this.tool !== 'select') this.tool = 'select';
+        if (!this.toolLock && this.tool !== 'select') this.tool = 'select';
         this.elements = [...this.elements, ...els];
         this.selected = new Set(els.map((e) => e.id));
         this.commit();
@@ -656,6 +673,21 @@ export class CanvasEngine {
         this.commit();
         this.onAction('note_pasted');
     }
+    /** Plain pasted text: a transparent text element, not a sticky note. */
+    addText(text: string, at?: Pt) {
+        const c = at ?? this.viewCenter();
+        const k = 1 / this.cam.z;
+        const s = this.style;
+        const fs = s.fontSize * k;
+        const el: NoteEl = { id: newId(), type: 'note', x: c.x - 4 * k, y: c.y - fs * 0.7, w: 280 * k, h: fs * LH, r: 0, opacity: 1, text, bg: 'transparent', color: s.stroke, fontSize: fs };
+        const pad = notePad(el);
+        const lines = this.wrap(text, el.w - pad * 2, el.fontSize);
+        el.h = Math.max(el.fontSize * LH, lines.length * el.fontSize * LH + pad * 2);
+        this.elements = [...this.elements, el];
+        this.selected = new Set([el.id]);
+        this.commit();
+        this.onAction('text_pasted');
+    }
     private createNote(w: Pt, text: boolean) {
         const s = this.style;
         const k = 1 / this.cam.z;
@@ -666,8 +698,10 @@ export class CanvasEngine {
         this.elements = [...this.elements, el];
         this.selected = new Set([el.id]);
         this.commit();
-        this.tool = 'select';
-        this.canvas.style.cursor = 'default';
+        if (!this.toolLock) {
+            this.tool = 'select';
+            this.canvas.style.cursor = 'default';
+        }
         this.startEditing(el.id);
         this.onAction('note_created', { text });
     }
@@ -1161,7 +1195,8 @@ export class CanvasEngine {
                     this.commit();
                     this.onAction('shape_created', { type: e.type });
                 }
-                this.setTool('select');
+                // Tool lock keeps the creation tool active for consecutive shapes.
+                if (!this.toolLock) this.setTool('select');
                 this.selected = e ? new Set([e.id].filter((id) => this.elements.some((x) => x.id === id))) : new Set();
                 break;
             }
@@ -1291,6 +1326,10 @@ export class CanvasEngine {
         if (e.shiftKey && e.code === 'Digit1') return this.fit(false), true;
         if (e.shiftKey && e.code === 'Digit2') return this.fit(true), true;
         if (mod || e.altKey || e.shiftKey) return false;
+        if (k === 'i') {
+            this.onAction('eyedropper');
+            return true;
+        }
         const map: Record<string, Tool> = { v: 'select', '1': 'select', h: 'hand', n: 'note', t: 'text', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', p: 'draw', d: 'draw', e: 'eraser' };
         const t = map[k];
         if (t) {

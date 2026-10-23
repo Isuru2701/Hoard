@@ -1,14 +1,16 @@
 import type React from 'react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { store, useStore } from '../state/store.ts';
-import { canvasAssetsPath, getRoot, openMenu, pickFiles, registerCanvas, rescan, toast, toggleFullscreen } from '../state/actions.ts';
+import { canvasAssetsPath, getRoot, openMenu, pickFiles, registerCanvas, rescan, toast, toggleFullscreen, addPaletteColor, removePaletteColor } from '../state/actions.ts';
 import { DRAG_MIME, getFile, isMediaFile, joinPath } from '../lib/fs.ts';
 import { downloadBlob } from '../lib/zip.ts';
 import { CanvasEngine, type Pt } from './engine.ts';
 import { AssetImages, addFilesToAssets, loadCanvasDoc, saveCanvasDoc } from './assets.ts';
 import { FILLS, FONT_SIZES, NOTE_BGS, STROKES, WIDTHS, type Tool } from './types.ts';
+import { ColorPopover, useColorDismiss, type ColorFormat } from './ColorPicker.tsx';
+import { parseCssColor, toHex } from './color.ts';
 import { IconBtn } from '../ui/kit.tsx';
-import type { IconName } from '../ui/Icon.tsx';
+import { Icon, type IconName } from '../ui/Icon.tsx';
 import { LibraryDrawer, NoteEditor, SelectionPanel } from './CanvasPanels.tsx';
 import { isTauri, nativeFile } from '../lib/tauriFs.ts';
 
@@ -44,7 +46,87 @@ async function exportPng(engine: CanvasEngine, mode: 'clipboard' | 'download') {
     toast('Saved PNG');
 }
 
+type ColorChannel = 'stroke' | 'fill' | 'noteBg';
+
+const PRESETS: Record<ColorChannel, string[]> = { stroke: STROKES, fill: FILLS, noteBg: NOTE_BGS };
+const FALLBACK_COLOR = '#5b9cff';
+
+/** Toolbar eyedropper: sample a color anywhere on screen and copy its hex to the clipboard. */
+async function pickScreenColor() {
+    const EyeDropperCls = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+    if (!EyeDropperCls) {
+        toast("Screen eyedropper isn't supported here");
+        return;
+    }
+    try {
+        const res = await new EyeDropperCls().open();
+        const c = parseCssColor(res.sRGBHex);
+        const hex = c ? toHex(c) : res.sRGBHex;
+        await navigator.clipboard.writeText(hex);
+        toast(`Copied ${hex}`);
+    } catch {
+        /* cancelled */
+    }
+}
+
+interface ColorRowProps {
+    engine: CanvasEngine;
+    channel: ColorChannel;
+    /** Opens the "add custom color" popover for this row. */
+    onAdd: (channel: ColorChannel) => void;
+    picking: boolean;
+}
+
+function ColorSwatches({ engine, channel, onAdd, picking }: ColorRowProps) {
+    const custom = useStore((s) => s.meta.palette?.[channel]) ?? [];
+    const current = engine.style[channel];
+    const apply = (c: string, e: React.MouseEvent<HTMLElement>) => {
+        if (e.ctrlKey || e.metaKey) {
+            removePaletteColor(channel, c);
+            return;
+        }
+        engine.applyStyle({ [channel]: c } as Partial<CanvasEngine['style']>, true);
+    };
+    return (
+        <div>
+            <div className="flex flex-wrap gap-1.5">
+                {PRESETS[channel].map((c) => (
+                    <button
+                        key={c}
+                        aria-label={`${channel} color ${c}`}
+                        title={c === 'transparent' ? 'None' : c}
+                        className={`swatch ${channel === 'fill' && c === 'transparent' ? 'swatch-none' : ''} ${current === c ? 'on' : ''}`}
+                        style={c === 'transparent' ? undefined : { background: c }}
+                        onClick={(e) => apply(c, e)}
+                    />
+                ))}
+                {custom.map((c) => (
+                    <button
+                        key={`custom:${c}`}
+                        className={`swatch ${current === c ? 'on' : ''} ring-1 ring-accent/40`}
+                        title={`Custom color ${c} — Ctrl+click to remove`}
+                        style={{ background: c }}
+                        onClick={(e) => apply(c, e)}
+                    />
+                ))}
+            </div>
+            <button
+                data-color-anchor
+                className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-fg"
+                onClick={() => onAdd(channel)}
+            >
+                <Icon name="plus" size={12} />
+                {picking ? 'Picking…' : 'Add custom color'}
+            </button>
+            {custom.length > 0 && <div className="mt-0.5 text-[10px] leading-tight text-muted">Ctrl+click a custom color to remove it</div>}
+        </div>
+    );
+}
+
 function StyleBar({ engine, left }: { engine: CanvasEngine; left: number }) {
+    const [picking, setPicking] = useState<ColorChannel | null>(null);
+    const [format, setFormat] = useState<ColorFormat>('hex');
+    const lastEmit = useRef('');
     const sel = engine.selectedEls();
     const t = engine.tool;
     const types = new Set<string>(sel.map((e) => (e.type === 'note' ? (e.bg === 'transparent' ? 'text' : 'note') : e.type)));
@@ -54,70 +136,103 @@ function StyleBar({ engine, left }: { engine: CanvasEngine; left: number }) {
     const fill = types.has('rect') || types.has('ellipse');
     const note = types.has('note');
     const font = types.has('note') || types.has('text');
+    useColorDismiss(!!picking, () => setPicking(null));
+    // Start the popover at the current custom value, or the last custom swatch from this channel's palette.
+    useEffect(() => {
+        if (!picking) return;
+        const s0 = engine.style;
+        const current = s0[picking];
+        const custom = (store.get().meta.palette?.[picking] ?? []).slice(-1)[0] ?? FALLBACK_COLOR;
+        lastEmit.current = PRESETS[picking].includes(current) ? custom : current;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [picking]);
     if (!stroke && !note && !font) return null;
     const s = engine.style;
-    const apply = (p: Parameters<CanvasEngine['applyStyle']>[0]) => {
-        
-        engine.applyStyle(p);
+    const apply = (p: Parameters<CanvasEngine['applyStyle']>[0], commitNow = true) => {
+        engine.applyStyle(p, commitNow);
     };
     return (
-        <div className="floating absolute top-16 z-10 max-h-[calc(100%-140px)] w-[176px] space-y-3 overflow-y-auto rounded-xl p-3" style={{ left }}>
-            {stroke && (
-                <div>
-                    <div className="section-label mb-1.5">Stroke</div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {STROKES.map((c) => (
-                            <button key={c} aria-label="Stroke color" className={`swatch ${s.stroke === c ? 'on' : ''}`} style={{ background: c }} onClick={() => apply({ stroke: c })} />
-                        ))}
+        <>
+            <div className="floating absolute top-16 z-10 max-h-[calc(100%-140px)] w-[176px] space-y-3 overflow-y-auto rounded-xl p-3" style={{ left }}>
+                {stroke && (
+                    <div>
+                        <div className="section-label mb-1.5">Stroke</div>
+                        <ColorSwatches engine={engine} channel="stroke" onAdd={setPicking} picking={picking === 'stroke'} />
                     </div>
-                </div>
-            )}
-            {width && (
-                <div>
-                    <div className="section-label mb-1.5">Width</div>
-                    <div className="flex gap-1">
-                        {WIDTHS.map((w) => (
-                            <button key={w} className={`grid h-8 flex-1 place-items-center rounded-md ${s.sw === w ? 'bg-accent/20' : 'bg-white/5'}`} onClick={() => apply({ sw: w })} aria-label={`Width ${w}`}>
-                                <span className="block w-5 rounded-full bg-white" style={{ height: Math.max(1, w * 0.8) }} />
-                            </button>
-                        ))}
+                )}
+                {width && (
+                    <div>
+                        <div className="section-label mb-1.5">Width</div>
+                        <div className="flex gap-1">
+                            {WIDTHS.map((w) => (
+                                <button key={w} className={`grid h-8 flex-1 place-items-center rounded-md ${s.sw === w ? 'bg-accent/20' : 'bg-white/5'}`} onClick={() => apply({ sw: w })} aria-label={`Width ${w}`}>
+                                    <span className="block w-5 rounded-full bg-white" style={{ height: Math.max(1, w * 0.8) }} />
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
-            {fill && (
-                <div>
-                    <div className="section-label mb-1.5">Fill</div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {FILLS.map((c) => (
-                            <button key={c} aria-label="Fill color" className={`swatch ${c === 'transparent' ? 'swatch-none' : ''} ${s.fill === c ? 'on' : ''}`} style={c === 'transparent' ? undefined : { background: c }} onClick={() => apply({ fill: c })} />
-                        ))}
+                )}
+                {fill && (
+                    <div>
+                        <div className="section-label mb-1.5">Fill</div>
+                        <ColorSwatches engine={engine} channel="fill" onAdd={setPicking} picking={picking === 'fill'} />
                     </div>
-                </div>
-            )}
-            {note && (
-                <div>
-                    <div className="section-label mb-1.5">Note color</div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {NOTE_BGS.map((c) => (
-                            <button key={c} aria-label="Note color" className={`swatch ${s.noteBg === c ? 'on' : ''}`} style={{ background: c }} onClick={() => apply({ noteBg: c })} />
-                        ))}
+                )}
+                {note && (
+                    <div>
+                        <div className="section-label mb-1.5">Note color</div>
+                        <ColorSwatches engine={engine} channel="noteBg" onAdd={setPicking} picking={picking === 'noteBg'} />
                     </div>
-                </div>
-            )}
-            {font && (
-                <div>
-                    <div className="section-label mb-1.5">Text size</div>
-                    <div className="flex gap-1">
-                        {FONT_SIZES.map((f, i) => (
-                            <button key={f} className={`h-8 flex-1 rounded-md text-xs font-semibold ${s.fontSize === f ? 'bg-accent/20 text-white' : 'bg-white/5 text-muted'}`} onClick={() => apply({ fontSize: f })}>
-                                {['S', 'M', 'L', 'XL'][i]}
-                            </button>
-                        ))}
+                )}
+                {font && (
+                    <div>
+                        <div className="section-label mb-1.5">Text size</div>
+                        <div className="flex gap-1">
+                            {FONT_SIZES.map((f, i) => (
+                                <button key={f} className={`h-8 flex-1 rounded-md text-xs font-semibold ${s.fontSize === f ? 'bg-accent/20 text-white' : 'bg-white/5 text-muted'}`} onClick={() => apply({ fontSize: f })}>
+                                    {['S', 'M', 'L', 'XL'][i]}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
+            </div>
+            {picking && (
+                <ColorPopover
+                    value={lastEmit.current}
+                    onChange={(css) => {
+                        lastEmit.current = css;
+                        applyRaw(engine, picking, css);
+                    }}
+                    onClose={() => setPicking(null)}
+                    format={format}
+                    onFormat={setFormat}
+                    title={`Custom ${picking === 'noteBg' ? 'note' : picking} color`}
+                    className="top-16 max-sm:hidden"
+                    style={{ left: left + 188, zIndex: 45 }}
+                    extras={
+                        <button
+                            className="btn !h-7 w-full justify-center !text-[11px]"
+                            title={`Add to the ${picking} swatches and apply it`}
+                            onClick={() => {
+                                const css = lastEmit.current || FALLBACK_COLOR;
+                                addPaletteColor(picking, css);
+                                engine.applyStyle({ [picking]: css } as Partial<CanvasEngine['style']>, true);
+                                setPicking(null);
+                            }}
+                        >
+                            Add color
+                        </button>
+                    }
+                />
             )}
-        </div>
+        </>
     );
+}
+
+/** Live style updates during a drag: no immediate commit, engine coalesces the undo entry. */
+function applyRaw(engine: CanvasEngine, channel: ColorChannel, css: string) {
+    engine.applyStyle({ [channel]: css } as Partial<CanvasEngine['style']>, false);
 }
 
 export default function CanvasView({ path }: { path: string }) {
@@ -159,8 +274,10 @@ export default function CanvasView({ path }: { path: string }) {
         };
         eng.onCommit = schedule;
         eng.onCamera = schedule;
-        eng.onAction = (name, props) => 
         eng.onMenu = (x, y, onEl) => openCanvasMenu(eng, x, y, onEl);
+        eng.onAction = (name) => {
+            if (name === 'eyedropper') void pickScreenColor();
+        };
         const unregister = registerCanvas(path, async () => {
             await flush();
             disabled = true;
@@ -279,8 +396,8 @@ export default function CanvasView({ path }: { path: string }) {
                     toast('The copied library selection is no longer available');
                 }
             } else if (files.length && text !== CLIP_MARKER) void addFiles(files, engine.pointerWorld());
-            else if (text && text !== CLIP_MARKER && !engine.hasClipboard) engine.addNote(text, engine.pointerWorld());
-            else if (!engine.paste(engine.pointerWorld()) && text && text !== CLIP_MARKER) engine.addNote(text, engine.pointerWorld());
+            else if (text && text !== CLIP_MARKER && !engine.hasClipboard) engine.addText(text, engine.pointerWorld());
+            else if (!engine.paste(engine.pointerWorld()) && text && text !== CLIP_MARKER) engine.addText(text, engine.pointerWorld());
         };
         window.addEventListener('keydown', down);
         window.addEventListener('keyup', up);
@@ -347,20 +464,21 @@ export default function CanvasView({ path }: { path: string }) {
                 <>
                     {/* Tools */}
                     <div className="floating absolute left-1/2 top-3 z-10 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl p-1">
+                        <IconBtn
+                            icon="lock"
+                            title="Tool lock — keeps the current tool active after use (off: tools switch back to select)"
+                            ev="canvas_tool_lock_toggled"
+                            active={engine.toolLock}
+                            onClick={() => engine.toggleToolLock()}
+                        />
+                        <div className="mx-1 h-5 w-px shrink-0 bg-line" />
                         {TOOLS.map((t) => (
                             <IconBtn key={t.t} icon={t.icon} title={t.label} ev={`canvas_tool_${t.t}_clicked`} active={engine.tool === t.t} onClick={() => engine.setTool(t.t)} />
                         ))}
                         <div className="mx-1 h-5 w-px shrink-0 bg-line" />
-                        <IconBtn
-                            icon="upload"
-                            title="Add images from your device"
-                            ev="canvas_upload_clicked"
-                            onClick={async () => {
-                                const files = await pickFiles();
-                                if (files.length) void addFiles(files);
-                            }}
-                        />
+                        <IconBtn icon="upload" title="Add images from your device" ev="canvas_upload_clicked" onClick={async () => { const files = await pickFiles(); if (files.length) void addFiles(files); }} />
                         <IconBtn icon="images" title="Library: drag images from your folders" ev="canvas_library_toggled" active={library} onClick={() => setLibrary(!library)} />
+                        <IconBtn icon="dropper" title="Eyedropper — pick a color on screen and copy its hex to the clipboard (I)" ev="canvas_eyedropper_clicked" onClick={() => void pickScreenColor()} />
                         <div className="mx-1 h-5 w-px shrink-0 bg-line" />
                         <IconBtn icon="undo" title="Undo (Ctrl+Z)" ev="canvas_undo_clicked" disabled={!engine.canUndo} onClick={() => engine.undo()} />
                         <IconBtn icon="redo" title="Redo (Ctrl+Shift+Z)" ev="canvas_redo_clicked" disabled={!engine.canRedo} onClick={() => engine.redo()} />

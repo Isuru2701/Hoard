@@ -3,7 +3,7 @@ import { ASSETS_SUFFIX, CANVAS_EXT, basename, entries, joinPath, kindOf, type Di
 export interface FileEntry {
     path: string;
     name: string;
-    kind: 'image' | 'video' | 'file';
+    kind: 'image' | 'video' | 'markdown' | 'file';
     size: number;
     modified: number;
     folder: string;
@@ -16,11 +16,18 @@ export interface CanvasEntry {
     folder: string;
     modified: number;
 }
+export interface DocEntry {
+    path: string;
+    name: string;
+    folder: string;
+    modified: number;
+}
 export interface FolderNode {
     path: string;
     name: string;
     children: FolderNode[];
     canvases: CanvasEntry[];
+    docs: DocEntry[];
     mediaCount: number;
     totalCount: number;
 }
@@ -28,6 +35,7 @@ export interface ScanResult {
     tree: FolderNode;
     files: FileEntry[];
     canvases: CanvasEntry[];
+    docs: DocEntry[];
     folders: FolderNode[];
     byPath: Map<string, FileEntry>;
 }
@@ -37,11 +45,12 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 export async function scanWorkspace(root: Dir): Promise<ScanResult> {
     const files: FileEntry[] = [];
     const canvases: CanvasEntry[] = [];
+    const docs: DocEntry[] = [];
     const folders: FolderNode[] = [];
 
     async function walk(dir: Dir, path: string, hidden: boolean): Promise<FolderNode> {
         const leaf = path ? basename(path) : 'Workspace';
-        const node: FolderNode = { path, name: leaf.endsWith(ASSETS_SUFFIX) ? leaf.slice(0, -ASSETS_SUFFIX.length) : leaf, children: [], canvases: [], mediaCount: 0, totalCount: 0 };
+        const node: FolderNode = { path, name: leaf.endsWith(ASSETS_SUFFIX) ? leaf.slice(0, -ASSETS_SUFFIX.length) : leaf, children: [], canvases: [], docs: [], mediaCount: 0, totalCount: 0 };
         const jobs: Promise<void>[] = [];
         for (const [name, handle] of await entries(dir)) {
             if (name.startsWith('.')) continue;
@@ -72,6 +81,11 @@ export async function scanWorkspace(root: Dir): Promise<ScanResult> {
                                 return;
                             }
                             files.push({ path: p, name, kind, size: f.size, modified: f.lastModified, folder: path, hidden });
+                            if (kind === 'markdown' && !hidden) {
+                                const d = { path: p, name: name.replace(/\.(md|markdown|mdx)$/i, ''), folder: path, modified: f.lastModified };
+                                docs.push(d);
+                                node.docs.push(d);
+                            }
                             if (kind !== 'file') node.mediaCount++;
                         })
                         .catch(() => {})
@@ -81,13 +95,15 @@ export async function scanWorkspace(root: Dir): Promise<ScanResult> {
         await Promise.all(jobs);
         node.children.sort(byName);
         node.canvases.sort(byName);
+        node.docs.sort(byName);
         node.totalCount += node.mediaCount;
         return node;
     }
 
     const tree = await walk(root, '', false);
     files.sort((a, b) => b.modified - a.modified);
-    return { tree, files, canvases, folders, byPath: new Map(files.map((f) => [f.path, f])) };
+    docs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return { tree, files, canvases, docs, folders, byPath: new Map(files.map((f) => [f.path, f])) };
 }
 
 export function findFolder(node: FolderNode, path: string): FolderNode | null {

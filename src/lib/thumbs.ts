@@ -12,7 +12,7 @@ export interface MediaRef {
     path: string;
     size: number;
     modified: number;
-    kind: 'image' | 'video' | 'file';
+    kind: 'image' | 'video' | 'file' | 'markdown';
 }
 
 const pending = new Map<string, Promise<ThumbRec | null>>();

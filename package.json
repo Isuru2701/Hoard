@@ -4,7 +4,6 @@
     "description": "Pixi.js v8 + React 19 + Tailwind v4 + Vite + TypeScript",
     "private": true,
     "type": "module",
-
     "scripts": {
         "dev": "vite",
         "tauri": "tauri",
@@ -14,7 +13,6 @@
         "build": "npm run _build",
         "preview": "vite preview"
     },
-
     "keywords": [
         "pixi",
         "react",
@@ -23,21 +21,19 @@
         "typescript",
         "game"
     ],
-
     "allowScripts": {
         "esbuild": true,
         "fsevents": true,
         "protobufjs": true
     },
-
     "dependencies": {
         "@huggingface/transformers": "^3.7.2",
+        "@milkdown/crepe": "^7.22.3",
         "@tauri-apps/api": "^2.8.0",
         "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
         "react": "19.2.4",
         "react-dom": "19.2.4"
     },
-    
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.5",
         "@tauri-apps/cli": "^2.8.0",
@@ -45,6 +41,7 @@
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react": "^4.4.1",
         "cross-env": "^7.0.3",
+        "playwright": "^1.64.1",
         "tailwindcss": "^4.1.5",
         "typescript": "^7.0.2",
         "vite": "^6.3.5"

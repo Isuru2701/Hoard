@@ -4,6 +4,7 @@ import {
     closeWorkspace,
     createCanvas,
     createFolder,
+    createMarkdown,
     createMenuItems,
     importFiles,
     importInto,
@@ -16,7 +17,7 @@ import {
     trashItems,
 } from '../state/actions.ts';
 import { DRAG_MIME, dirname } from '../lib/fs.ts';
-import type { CanvasEntry, FolderNode } from '../lib/scan.ts';
+import type { CanvasEntry, DocEntry, FolderNode } from '../lib/scan.ts';
 import { Btn, IconBtn } from './kit.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 
@@ -73,6 +74,7 @@ function folderMenu(node: FolderNode) {
     return [
         { label: 'New subfolder', icon: 'folderPlus' as const, ev: 'folder_menu_subfolder', onClick: () => void createFolder(node.path) },
         { label: 'New canvas here', icon: 'canvas' as const, ev: 'folder_menu_canvas', onClick: () => void createCanvas(node.path) },
+        { label: 'New markdown here', icon: 'file' as const, ev: 'folder_menu_markdown', onClick: () => void createMarkdown(node.path) },
         { label: 'Import here', icon: 'upload' as const, ev: 'folder_menu_import', onClick: () => void importInto(node.path) },
         { label: 'Rename', icon: 'edit' as const, ev: 'folder_menu_rename', onClick: () => void renameEntry(node.path, 'folder') },
         { label: 'Move to trash', icon: 'trash' as const, danger: true, ev: 'folder_menu_trash', onClick: () => void trashItems([{ path: node.path, type: 'folder' }]) },
@@ -109,11 +111,38 @@ function CanvasRow({ c, depth }: { c: CanvasEntry; depth: number }) {
     );
 }
 
+function docMenu(d: DocEntry) {
+    return [
+        { label: 'Open', icon: 'file' as const, ev: 'doc_menu_open', onClick: () => navigate({ kind: 'doc', path: d.path }) },
+        { label: 'Rename', icon: 'edit' as const, ev: 'doc_menu_rename', onClick: () => void renameEntry(d.path, 'file') },
+        { label: 'Move to trash', icon: 'trash' as const, danger: true, ev: 'doc_menu_trash', onClick: () => void trashItems([{ path: d.path, type: 'file' }]) },
+    ];
+}
+
+function DocRow({ d, depth }: { d: DocEntry; depth: number }) {
+    const active = useStore((s) => s.view.kind === 'doc' && s.view.path === d.path);
+    return (
+        <div
+            className={`tree-row ${active ? 'on' : ''}`}
+            style={{ paddingLeft: 8 + depth * 14 }}
+            onClick={() => navigate({ kind: 'doc', path: d.path })}
+            onContextMenu={(e) => menuAt(e, docMenu(d))}
+        >
+            <span className="w-4" />
+            <Icon name="file" size={15} className="shrink-0 text-muted" />
+            <span className="flex-1 truncate">{d.name}</span>
+            <button className="row-more ib !h-6 !min-w-6" aria-label="Document options" onClick={(e) => menuAt(e, docMenu(d))}>
+                <Icon name="more" size={14} />
+            </button>
+        </div>
+    );
+}
+
 function FolderRow({ node, depth }: { node: FolderNode; depth: number }) {
     const collapsed = useStore((s) => !!s.collapsed[node.path]);
     const active = useStore((s) => s.view.kind === 'folder' && s.view.path === node.path);
     const drop = useFolderDrop(node.path);
-    const hasKids = node.children.length + node.canvases.length > 0;
+    const hasKids = node.children.length + node.canvases.length + node.docs.length > 0;
     return (
         <div>
             <div
@@ -157,6 +186,9 @@ function TreeChildren({ node, depth }: { node: FolderNode; depth: number }) {
             ))}
             {node.canvases.map((c) => (
                 <CanvasRow key={c.path} c={c} depth={depth} />
+            ))}
+            {node.docs.map((d) => (
+                <DocRow key={d.path} d={d} depth={depth} />
             ))}
         </>
     );

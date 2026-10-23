@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { store, useStore } from '../../state/store.ts';
-import { createMenuItems, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
+import { createMenuItems, createMarkdown, navigate, openMenu, openViewer, canvasName } from '../../state/actions.ts';
 import { basename } from '../../lib/fs.ts';
 import { findFolder } from '../../lib/scan.ts';
 import { allTags } from '../../lib/meta.ts';
@@ -56,7 +56,10 @@ export default function Home() {
                         icon="plus"
                         onClick={(e) => {
                             const r = e.currentTarget.getBoundingClientRect();
-                            openMenu(r.left, r.bottom + 4, createMenuItems(''));
+                            openMenu(r.left, r.bottom + 4, [
+                                ...createMenuItems(''),
+                                { label: 'New markdown', icon: 'file', ev: 'create_menu_markdown', onClick: () => void createMarkdown('Inbox') },
+                            ]);
                         }}
                     >
                         Create
@@ -133,8 +136,18 @@ export default function Home() {
                     ) : (
                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                             {recentFiles.map((f, i) => (
-                                <button key={f.path} className="aspect-square overflow-hidden rounded-lg bg-white/5" onClick={() => openViewer(recentFiles.map((x) => x.path), i)}>
-                                    <ThumbImg entry={f} className="h-full w-full" />
+                                <button
+                                    key={f.path}
+                                    className="aspect-square overflow-hidden rounded-lg bg-white/5"
+                                    onClick={() => (f.kind === 'markdown' ? navigate({ kind: 'doc', path: f.path }) : openViewer(recentFiles.map((x) => x.path), i))}
+                                >
+                                    {f.kind === 'markdown' ? (
+                                        <div className="grid h-full w-full place-items-center text-muted">
+                                            <Icon name="file" size={20} />
+                                        </div>
+                                    ) : (
+                                        <ThumbImg entry={f} className="h-full w-full" />
+                                    )}
                                 </button>
                             ))}
                         </div>
