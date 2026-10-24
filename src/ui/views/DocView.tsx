@@ -4,7 +4,7 @@ import { basename, readText, writeFile } from '../../lib/fs.ts';
 import { splitFrontmatter, joinDoc } from '../../lib/frontmatter.ts';
 import { notifyDocChanged } from '../../lib/docEvents.ts';
 import { IconBtn } from '../kit.tsx';
-import { MarkdownEditor } from '../MarkdownEditor.tsx';
+import { MarkdownEditor, type MarkdownApi } from '../MarkdownEditor.tsx';
 
 type Mode = 'wysiwyg' | 'source';
 
@@ -17,9 +17,17 @@ export default function DocView({ path }: { path: string }) {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [mode, setMode] = useState<Mode>('wysiwyg');
-    const [wysiwygKey, setWysiwygKey] = useState(0);
     const textRef = useRef('');
     const saveTimer = useRef(0);
+    // Live-editor handle: kept across mode switches so the undo/redo history in
+    // the ProseMirror editor is never destroyed by leaving WYSIWYG view.
+    const editorRef = useRef<MarkdownApi | null>(null);
+    // Exact textarea content when source mode was entered (and while it lasts),
+    // used to detect source edits without tripping on WYSIWYG serialization drift.
+    const sourceBase = useRef('');
+    // Source edits made before the rich editor finished booting get merged on ready.
+    const pendingApply = useRef<string | null>(null);
+    const sourceRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         let live = true;
@@ -112,9 +120,35 @@ export default function DocView({ path }: { path: string }) {
     const switchMode = (next: Mode) => {
         if (next === mode) return;
         flush();
+        if (next === 'wysiwyg') {
+            // The editor stayed alive while hidden — merge the source text into its
+            // doc with a single transaction (one undo step) instead of remounting,
+            // which threw away the whole undo/redo history.
+            const body = textRef.current;
+            const editor = editorRef.current;
+            if (body !== sourceBase.current) {
+                if (editor) {
+                    void editor.applyMarkdown(body);
+                } else {
+                    pendingApply.current = body;
+                }
+            }
+            sourceBase.current = body;
+        } else {
+            sourceBase.current = textRef.current;
+            // The textarea's value is only the initial content (uncontrolled).
+            window.setTimeout(() => sourceRef.current?.focus());
+        }
         setMode(next);
-        // Remount the editor from the latest text so nothing is lost in the swap.
-        setWysiwygKey((k) => k + 1);
+    };
+
+    const onEditorReady = (api: MarkdownApi) => {
+        editorRef.current = api;
+        const pending = pendingApply.current;
+        if (pending !== null) {
+            pendingApply.current = null;
+            void api.applyMarkdown(pending);
+        }
     };
 
     const header = (title: string, sub: ReactNode) => (
@@ -153,22 +187,22 @@ export default function DocView({ path }: { path: string }) {
     }
 
     return (
-        <div className="flex h-full flex-col" key={wysiwygKey}>
+        <div className="flex h-full flex-col">
             {header(title, status)}
             {frontmatter && (
                 <pre className="mx-4 shrink-0 rounded-lg border border-line bg-white/[0.03] p-3 font-mono text-xs leading-relaxed text-muted overflow-x-auto">{frontmatter}</pre>
             )}
-            {mode === 'wysiwyg' ? (
-                <MarkdownEditor value={textRef.current} onChange={(md) => put(md)} root={root} />
-            ) : (
-                <textarea
-                    className="min-h-0 flex-1 resize-none bg-transparent px-6 py-4 font-mono text-sm leading-relaxed text-fg outline-none"
-                    defaultValue={textRef.current}
-                    spellCheck={false}
-                    placeholder="Write markdown here…"
-                    onChange={(e) => put(e.target.value)}
-                />
-            )}
+            <div className={`min-h-0 flex-1 ${mode === 'source' ? 'hidden' : 'flex flex-col'}`}>
+                <MarkdownEditor value={textRef.current} onChange={(md) => put(md)} root={root} onReady={onEditorReady} />
+            </div>
+            <textarea
+                ref={sourceRef}
+                className={`min-h-0 flex-1 resize-none bg-transparent px-6 py-4 font-mono text-sm leading-relaxed text-fg outline-none ${mode === 'wysiwyg' ? 'hidden' : ''}`}
+                defaultValue={textRef.current}
+                spellCheck={false}
+                placeholder="Write markdown here…"
+                onChange={(e) => put(e.target.value)}
+            />
         </div>
     );
 }

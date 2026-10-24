@@ -13,7 +13,15 @@ type CrepeLike = {
     editor: { action: <T>(fn: (ctx: MilkdownCtx) => T) => T };
     destroy: () => Promise<unknown>;
     on: (fn: (listener: ListenerApi) => void) => void;
+    getMarkdown: () => string;
 };
+
+/** Imperative access to the live ProseMirror doc, so view-mode switches can
+ *  edit it without tearing down (and losing the undo/redo history of) the editor. */
+export interface MarkdownApi {
+    /** Replace the whole WYSIWYG doc with the given markdown in one transaction. */
+    applyMarkdown(markdown: string): Promise<void>;
+}
 
 const HOARD_PASTE_RE = /^hoard:library-paths:([\s\S]+)$/;
 
@@ -35,11 +43,15 @@ export function MarkdownEditor(props: {
     /** Workspace root; needed to resolve embedded hoard-file: URLs. */
     root: Dir | null;
     className?: string;
+    /** Called once the editor finished creating; the api lives as long as this keep-mounted component does. */
+    onReady?: (api: MarkdownApi) => void;
 }) {
-    const { value, onChange, root, className = '' } = props;
+    const { value, onChange, root, className = '', onReady } = props;
     const hostRef = useRef<HTMLDivElement>(null);
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
+    const onReadyRef = useRef(onReady);
+    onReadyRef.current = onReady;
     const rootRef = useRef(root);
     rootRef.current = root;
     const crepeRef = useRef<CrepeLike | null>(null);
@@ -118,7 +130,8 @@ export function MarkdownEditor(props: {
 
         void (async () => {
             try {
-                const [{ Crepe }, { editorViewCtx }] = await Promise.all([import('@milkdown/crepe'), import('@milkdown/kit/core')]);
+                const [{ Crepe }, core] = await Promise.all([import('@milkdown/crepe'), import('@milkdown/kit/core')]);
+                const { editorViewCtx } = core;
                 await Promise.all([import('@milkdown/crepe/theme/common/style.css'), import('@milkdown/crepe/theme/frame-dark.css')]);
                 if (disposed || hostRef.current !== host) return;
                 const crepe = new Crepe({
@@ -149,6 +162,27 @@ export function MarkdownEditor(props: {
                 setLoading(false);
                 ready = true;
                 hoistImgs();
+                /** Typing in the whole-doc replace transaction is a single step in
+                 *  this doc's history, so undo/redo survives view-mode switches. */
+                const api: MarkdownApi = {
+                    applyMarkdown: async (markdown) => {
+                        const c = crepeRef.current;
+                        if (!c) return;
+                        try {
+                            const { parserCtx, editorViewCtx: viewCtx } = await import('@milkdown/kit/core');
+                            c.editor.action((ctx) => {
+                                const view: EditorView | null = ctx.get(viewCtx);
+                                if (!view) return;
+                                const doc = ctx.get(parserCtx)(markdown);
+                                if (!doc) return;
+                                view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content));
+                            });
+                        } catch (err) {
+                            console.warn('[wysiwyg] failed to apply markdown into the live editor', err);
+                        }
+                    },
+                };
+                onReadyRef.current?.(api);
             } catch (err) {
                 if (disposed) return;
                 console.warn('[wysiwyg] failed to start Milkdown Crepe', err);
@@ -165,7 +199,8 @@ export function MarkdownEditor(props: {
             const c = mount.crepe;
             if (c) void c.destroy().catch(() => {});
         };
-        // The editor is mounted from scratch per document / mode switch; `value` is only the initial content.
+        // The editor is mounted from scratch per document and stays alive across view-mode
+        // switches; `value` is only the initial content.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

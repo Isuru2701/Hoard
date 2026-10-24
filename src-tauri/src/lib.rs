@@ -276,7 +276,7 @@ struct OverlayRect {
 fn overlay_set_regions(window: tauri::WebviewWindow, rects: Vec<OverlayRect>) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, RGN_OR, SetWindowRgn};
+        use windows::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteGdiObject, RGN_OR, SetWindowRgn};
         let scale = window.scale_factor().map_err(|e| e.to_string())?;
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         let mut region = None;
@@ -288,14 +288,13 @@ fn overlay_set_regions(window: tauri::WebviewWindow, rects: Vec<OverlayRect>) ->
             if w <= 0 || h <= 0 {
                 continue;
             }
-            let piece = CreateRectRgn(x, y, x + w, y + h);
-            match region.replace(piece) {
-                Some(prev) => {
-                    unsafe {
-                        CombineRgn(Some(piece), Some(piece), Some(prev), RGN_OR);
-                    }
+            let piece = unsafe { CreateRectRgn(x, y, x + w, y + h) };
+            if let Some(prev) = region.replace(piece) {
+                unsafe {
+                    CombineRgn(Some(piece), Some(piece), Some(prev), RGN_OR);
+                    // The union now lives in `piece`; the old region is ours to free.
+                    let _ = DeleteGdiObject(prev);
                 }
-                None => region = Some(piece),
             }
         }
         unsafe {
