@@ -9,6 +9,16 @@ import { AssetImages, addFilesToAssets, loadCanvasDoc, saveCanvasDoc } from './a
 import { FILLS, FONT_SIZES, NOTE_BGS, STROKES, WIDTHS, type Tool } from './types.ts';
 import { ColorPopover, useColorDismiss, type ColorFormat } from './ColorPicker.tsx';
 import { parseCssColor, toHex } from './color.ts';
+import { invoke } from '@tauri-apps/api/core';
+import {
+    buildSnapshot,
+    openOverlay,
+    overlayActive,
+    overlayLocked,
+    pushSnapshot,
+    SUBSCRIBE_OVERLAY_FLAGS,
+    OVERLAY_MOVES_EVENT,
+} from '../overlay/client.ts';
 import { IconBtn } from '../ui/kit.tsx';
 import { Icon, type IconName } from '../ui/Icon.tsx';
 import { LibraryDrawer, NoteEditor, SelectionPanel } from './CanvasPanels.tsx';
@@ -245,6 +255,8 @@ export default function CanvasView({ path }: { path: string }) {
     const [dragOver, setDragOver] = useState(false);
     const pendingCanvasPaths = useStore((s) => s.pendingCanvasPaths);
     const assetsPath = canvasAssetsPath(path);
+    const pinned = useSyncExternalStore(SUBSCRIBE_OVERLAY_FLAGS, overlayActive);
+    const overlayIsLocked = useSyncExternalStore(SUBSCRIBE_OVERLAY_FLAGS, overlayLocked);
     useSyncExternalStore(engine ? engine.subscribe : noopSub, () => (engine ? engine.version : -1));
 
     useEffect(() => {
@@ -274,6 +286,28 @@ export default function CanvasView({ path }: { path: string }) {
         };
         eng.onCommit = schedule;
         eng.onCamera = schedule;
+        // Keep the overlay window in WYSIWYG sync with this canvas while pinned.
+        // Only image elements inside the viewport are shipped, as screen geometry.
+        let overlayTimer = 0;
+        const sendOverlay = () => {
+            if (!isTauri() || !overlayActive()) return;
+            window.clearTimeout(overlayTimer);
+            overlayTimer = window.setTimeout(() => {
+                const canvas = canvasRef.current;
+                if (!canvas || disabled || eng.destroyed) return;
+                void buildSnapshot(eng, path, assetsPath, wsId, canvas.getBoundingClientRect())
+                    .then(pushSnapshot)
+                    .catch(() => {});
+            }, 300);
+        };
+        eng.onCommit = () => {
+            schedule();
+            sendOverlay();
+        };
+        eng.onCamera = () => {
+            schedule();
+            sendOverlay();
+        };
         eng.onMenu = (x, y, onEl) => openCanvasMenu(eng, x, y, onEl);
         eng.onAction = (name) => {
             if (name === 'eyedropper') void pickScreenColor();
@@ -297,6 +331,7 @@ export default function CanvasView({ path }: { path: string }) {
             ro.disconnect();
             eng.destroy();
             images.destroy();
+            window.clearTimeout(overlayTimer);
             setEngine(null);
         };
     }, [path, wsId, assetsPath]);
@@ -329,6 +364,22 @@ export default function CanvasView({ path }: { path: string }) {
         });
         return () => unlisten?.();
     }, [engine]);
+
+    // Drags inside the overlay window move elements on this canvas too.
+    useEffect(() => {
+        if (!engine || !isTauri()) return;
+        let unlisten: (() => void) | undefined;
+        void import('@tauri-apps/api/event').then(async ({ listen }) => {
+            unlisten = await listen<{ canvasPath: string; moves: { id: string; x: number; y: number }[] }>(
+                OVERLAY_MOVES_EVENT,
+                ({ payload }) => {
+                    if (payload.canvasPath !== path || !payload.moves?.length) return;
+                    engine.applyMoves(payload.moves);
+                },
+            );
+        });
+        return () => unlisten?.();
+    }, [engine, path]);
 
     const addFiles = async (files: File[], at?: Pt) => {
         const root = getRoot();
@@ -456,6 +507,25 @@ export default function CanvasView({ path }: { path: string }) {
     const single = sel.length === 1 ? sel[0] : null;
     const grouped = engine?.selectionGrouped ?? false;
 
+    /** Canvas button: open the overlay, take controls back out of lock, or exit. */
+    const toggleOverlay = async () => {
+        const canvas = canvasRef.current;
+        if (!engine || !canvas || !isTauri()) return;
+        if (pinned) {
+            // Locked overlay swallows nothing visible to click in it, so the
+            // canvas button is the escape hatch back to the overlay controls.
+            if (overlayIsLocked) {
+                void invoke('overlay_release').catch(() => {});
+                toast('Overlay unlocked — use its controls');
+            } else {
+                void invoke('overlay_close').catch(() => {});
+            }
+            return;
+        }
+        const ok = await openOverlay(engine, path, assetsPath, wsId, canvas.getBoundingClientRect());
+        if (ok) toast('Pinned over your apps — drag images to move them; lock lets clicks through; Esc exits');
+    };
+
     return (
         <div
             ref={wrapRef}
@@ -552,6 +622,21 @@ export default function CanvasView({ path }: { path: string }) {
                         </button>
                         <IconBtn icon="zoomIn" title="Zoom in (Ctrl +)" ev="canvas_zoom_in_clicked" onClick={() => engine.zoomBy(1.25)} />
                         <IconBtn icon="fit" title="Zoom to fit (Shift+1)" ev="canvas_fit_clicked" onClick={() => engine.fit(false)} />
+                        {isTauri() && (
+                            <IconBtn
+                                icon="overlay"
+                                ev="canvas_overlay_clicked"
+                                active={pinned}
+                                title={
+                                    pinned
+                                        ? overlayIsLocked
+                                            ? 'Overlay locked — click to unlock its controls'
+                                            : 'A canvas is pinned over your apps — click to leave overlay mode'
+                                        : 'Pin over apps — float these images above Photoshop, CSP, etc. (transparent + click-through)'
+                                }
+                                onClick={() => void toggleOverlay()}
+                            />
+                        )}
                         {sel.length === 0 && <IconBtn icon="download" title="Export whole canvas as PNG" ev="canvas_export_all_clicked" onClick={() => void exportPng(engine, 'download')} />}
                         <IconBtn icon="maximize" title="Fullscreen canvas (Shift+F)" ev="canvas_fullscreen_clicked" onClick={toggleFullscreen} />
                     </div>

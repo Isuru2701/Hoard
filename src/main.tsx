@@ -5,12 +5,22 @@ import { bootRegistry, flushMeta } from './state/actions.ts';
 import { store } from './state/store.ts';
 import './styles/app.css';
 
+/** Route flag injected by the Tauri overlay window's initialization script. */
+const IS_OVERLAY = '__HOARD_OVERLAY__' in window;
+
 async function boot() {
+    if (IS_OVERLAY) {
+        // The overlay must be see-through from the very first paint.
+        document.documentElement.classList.add('overlay');
+        document.getElementById('boot-cover')?.remove();
+    }
     createRoot(document.getElementById('root')!).render(
         <React.StrictMode>
             <App />
         </React.StrictMode>
     );
+
+    if (IS_OVERLAY) return;
 
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {

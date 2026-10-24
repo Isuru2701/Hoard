@@ -2,8 +2,13 @@ import { useStore } from '../state/store.ts';
 import WorkspacePicker from './WorkspacePicker.tsx';
 import WorkspaceShell from './WorkspaceShell.tsx';
 import Overlays from './Overlays.tsx';
+import OverlayWindow from './OverlayWindow.tsx';
+
+/** True inside the transparent always-on-top overlay window (desktop only). */
+const IS_OVERLAY = '__HOARD_OVERLAY__' in window;
 
 export default function App() {
+    if (IS_OVERLAY) return <OverlayWindow />;
     const booted = useStore((s) => s.booted);
     const screen = useStore((s) => s.screen);
     return (

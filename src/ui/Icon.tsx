@@ -157,6 +157,13 @@ const paths = {
             <rect x="15" y="15" width="6" height="6" rx="1" fill="currentColor" stroke="none" />
         </>
     ),
+    overlay: (
+        <>
+            <rect x="2.5" y="8.5" width="13" height="13" rx="2" />
+            <path d="M7.5 5.5V5a2 2 0 0 1 2-2H19a2 2 0 0 1 2 2v9.5a2 2 0 0 1-2 2h-.5" />
+            <path d="M9.5 15v5.5M6.7 17.8l2.8 2.7 2.8-2.7" />
+        </>
+    ),
 };
 
 export type IconName = keyof typeof paths;

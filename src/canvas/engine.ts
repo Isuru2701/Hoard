@@ -384,6 +384,17 @@ export class CanvasEngine {
         if (!this.selected.size) return [];
         return this.elements.filter((e) => this.selected.has(e.id));
     }
+    /** Applies element moves made in the overlay window (screen drag → doc coords). */
+    applyMoves(moves: { id: string; x: number; y: number }[]) {
+        const patched = moves.filter((m) => Number.isFinite(m.x) && Number.isFinite(m.y));
+        if (!patched.length) return;
+        const map = new Map(patched.map((m) => [m.id, m] as const));
+        this.elements = this.elements.map((e) => {
+            const m = map.get(e.id);
+            return m ? { ...e, x: m.x, y: m.y } : e;
+        });
+        this.commit();
+    }
     selectIds(ids: string[]) {
         this.selected = new Set(ids.filter((id) => this.elements.some((el) => el.id === id)));
         this.touch();

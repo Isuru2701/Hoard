@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for Hoard",
-  "windows": ["main"],
+  "windows": ["main", "overlay"],
   "permissions": ["core:default"]
 }

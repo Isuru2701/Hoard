@@ -285,6 +285,30 @@ textarea.input {
     border: 1px solid var(--color-line);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
+
+/* Overlay window (html.overlay is set in main.tsx): the page itself must be
+   invisible — only the floating images and the control pill are rendered. */
+html.overlay,
+html.overlay body {
+    background: transparent;
+}
+.overlay-float {
+    cursor: grab;
+    border-radius: 2px;
+    outline: 1px solid transparent;
+    outline-offset: 1px;
+    transition: outline-color 0.12s;
+}
+.overlay-float:hover {
+    outline-color: rgba(91, 156, 255, 0.55);
+}
+.overlay-float.dragging {
+    cursor: grabbing;
+    outline-color: rgba(91, 156, 255, 0.95);
+}
+.overlay-float.pinned {
+    cursor: default;
+}
 .note-editor {
     position: absolute;
     z-index: 20;
