@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { store, useStore } from '../state/store.ts';
-import { askConfirm, autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, toast, trashItems, updateItemMeta } from '../state/actions.ts';
+import { askConfirm, autoTagItem, canvasAssetsPath, canvasName, getRoot, navigate, openViewer, renameEntry, renameEntryTo, toast, trashItems, updateItemMeta } from '../state/actions.ts';
 import { basename, getFile } from '../lib/fs.ts';
 import { findFolder, type FileEntry } from '../lib/scan.ts';
 import { getDims } from '../lib/thumbs.ts';
@@ -213,6 +213,28 @@ function TagEditor({ path }: { path: string }) {
 function FilePanel({ entry }: { entry: FileEntry }) {
     const meta = useStore((s) => s.meta.items[entry.path]) ?? {};
     const d = getDims(entry.path);
+    const [editingName, setEditingName] = useState(false);
+    const [draft, setDraft] = useState(entry.name);
+    const nameRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (editingName) nameRef.current?.select();
+    }, [editingName]);
+    const startEdit = () => {
+        setDraft(entry.name);
+        setEditingName(true);
+    };
+    const commitName = () => {
+        const original = entry.name;
+        const value = draft.trim();
+        setEditingName(false);
+        if (!value || value === original) {
+            setDraft(original);
+            return;
+        }
+        void renameEntryTo(entry.path, 'file', value).then((ok) => {
+            if (!ok) setDraft(original);
+        });
+    };
     const download = async () => {
         const root = getRoot();
         if (!root) return;
@@ -226,7 +248,37 @@ function FilePanel({ entry }: { entry: FileEntry }) {
                 </button>
                 <div className="mt-3 flex items-start gap-2">
                     <Icon name={entry.kind === 'video' ? 'video' : entry.kind === 'markdown' ? 'markdown' : 'images'} size={15} className="mt-0.5 shrink-0 text-muted" />
-                    <div className="min-w-0 break-all text-sm font-semibold">{entry.name}</div>
+                    {editingName ? (
+                        <input
+                            ref={nameRef}
+                            className="min-w-0 flex-1 rounded-md border border-accent/60 bg-white/[0.06] px-1.5 py-1 text-sm font-semibold text-fg outline-none"
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    commitName();
+                                }
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingName(false);
+                                    setDraft(entry.name);
+                                }
+                            }}
+                            onBlur={commitName}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`${basename(entry.path)}`}
+                            aria-label="File name"
+                        />
+                    ) : (
+                        <div
+                            className={`min-w-0 cursor-text break-all text-sm font-semibold ${entry.hidden ? '' : 'hover:text-accent'}`}
+                            title={entry.hidden ? 'This copy belongs to a canvas' : 'Click to rename'}
+                            onClick={entry.hidden ? undefined : startEdit}
+                        >
+                            {entry.name}
+                        </div>
+                    )}
                 </div>
                 <div className="mt-1 text-xs text-muted">
                     {d ? `${d.w} × ${d.h} · ` : ''}

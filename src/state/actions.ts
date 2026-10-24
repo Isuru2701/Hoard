@@ -607,40 +607,64 @@ export async function createMarkdown(folder: string) {
 
 export type EntryType = 'folder' | 'canvas' | 'file';
 
-export async function renameEntry(path: string, type: EntryType) {
-    if (!root) return;
-    const current = type === 'canvas' ? canvasName(path) : basename(path);
-    const raw = await askText('Rename', current, 'Rename');
-    if (!raw || raw === current) return;
+/**
+ * Shared core behind the rename dialog and the inline right-panel name editor.
+ * Renaming a canvas moves its assets folder along and re-maps meta keys, so
+ * canvas contents and thumbnails/tags stay intact. Returns true on success.
+ */
+export async function renameEntryTo(path: string, type: EntryType, raw: string): Promise<boolean> {
+    if (!root) return false;
+    const value = sanitizeName((raw ?? '').trim());
+    if (!value) return false;
+    if (type === 'file' && dirname(path).endsWith(ASSETS_SUFFIX)) {
+        // That file is one of a canvas's internal asset copies — renaming it
+        // would leave the canvas document pointing at a missing image.
+        toast('This image belongs to a canvas — rename the library copy instead');
+        return false;
+    }
+    if (value === basename(path) && !(type === 'canvas' && value === canvasName(path))) return false;
     const parent = dirname(path);
     const dir = await getDir(root, parent);
     let newPath: string;
     try {
         await releaseCanvases(path);
         if (type === 'canvas') {
-            const name = sanitizeName(raw);
-            if (await entryKind(dir, name + CANVAS_EXT)) return toast('A canvas with that name already exists');
+            if (await entryKind(dir, value + CANVAS_EXT)) {
+                toast('A canvas with that name already exists');
+                return false;
+            }
             const oldAssets = canvasAssetsPath(path);
-            newPath = await moveEntry(root, path, parent, name + CANVAS_EXT);
+            newPath = await moveEntry(root, path, parent, value + CANVAS_EXT);
             if (await entryKind(dir, basename(oldAssets))) {
-                const newAssets = await moveEntry(root, oldAssets, parent, name + ASSETS_SUFFIX);
+                const newAssets = await moveEntry(root, oldAssets, parent, value + ASSETS_SUFFIX);
                 remapMeta(oldAssets, newAssets);
             }
         } else {
-            let name = sanitizeName(raw);
+            let name = value;
             const ext = extOf(path);
             if (type === 'file' && ext && !name.toLowerCase().endsWith('.' + ext)) name += '.' + ext;
-            if (await entryKind(dir, name)) return toast('That name is already taken');
+            if (await entryKind(dir, name)) {
+                toast('That name is already taken');
+                return false;
+            }
             newPath = await moveEntry(root, path, parent, name);
             remapMeta(path, newPath);
         }
     } catch (e) {
         console.warn(e);
         toast('Could not rename');
-        return;
+        return false;
     }
     remapViews(path, newPath);
     await rescan();
+    return true;
+}
+
+export async function renameEntry(path: string, type: EntryType) {
+    const current = type === 'canvas' ? canvasName(path) : basename(path);
+    const raw = await askText('Rename', current, 'Rename');
+    if (!raw || raw === current) return;
+    await renameEntryTo(path, type, raw);
 }
 
 export async function trashItems(targets: { path: string; type: EntryType }[]) {

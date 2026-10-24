@@ -49,6 +49,12 @@ class NativeFileHandle {
         return { size: this.size, modified: this.modified };
     }
 
+    /** Native rename/move; `moveEntry` (fs.ts) falls back to copy+delete when unavailable. */
+    async move(dst: Dir, newName: string): Promise<void> {
+        const to = `${(dst as unknown as { path: string }).path}\\${newName}`;
+        await invoke('move_path', { from: this.path, to });
+    }
+
     async createWritable() {
         let data = new Blob([]);
         return {
@@ -96,6 +102,12 @@ class NativeDirHandle {
 
     async removeEntry(name: string, options?: { recursive?: boolean }): Promise<void> {
         await invoke('remove_entry', { path: `${this.path}\\${name}`, recursive: options?.recursive ?? false });
+    }
+
+    /** Native rename/move; `moveEntry` (fs.ts) falls back to copy+delete when unavailable. */
+    async move(dst: Dir, newName: string): Promise<void> {
+        const to = `${(dst as unknown as { path: string }).path}\\${newName}`;
+        await invoke('move_path', { from: this.path, to });
     }
 }
 

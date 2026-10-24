@@ -2,6 +2,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use tauri::Manager;
 
 const OVERLAY_LABEL: &str = "overlay";
 
@@ -156,6 +157,20 @@ fn reveal_path(path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Fast native rename/move (same volume). Callers fall back to copy+delete on error.
+#[tauri::command]
+fn move_path(from: String, to: String) -> Result<(), String> {
+    let from = safe_path(&from)?;
+    let to = safe_path(&to)?;
+    if from == to {
+        return Ok(());
+    }
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&from, &to).map_err(|e| e.to_string())
+}
+
 // ---------------------------------------------------------------- overlay mode
 
 /// A click-through overlay window that floats the canvas images over other apps.
@@ -261,8 +276,7 @@ struct OverlayRect {
 fn overlay_set_regions(window: tauri::WebviewWindow, rects: Vec<OverlayRect>) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, RGN_OR};
-        use windows::Win32::UI::WindowsAndMessaging::SetWindowRgn;
+        use windows::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, RGN_OR, SetWindowRgn};
         let scale = window.scale_factor().map_err(|e| e.to_string())?;
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         let mut region = None;
@@ -320,6 +334,7 @@ pub fn run() {
             entry_kind,
             remove_entry,
             reveal_path,
+            move_path,
             overlay_open,
             overlay_close,
             overlay_set_locked,
